@@ -3,6 +3,74 @@ from torch import nn
 
 from sunerf.rendering.base import SuNeRFRendering, cumprod_exclusive
 
+def rectangular_integral(x, y, cumsum=False):
+    '''
+    Compute the rectangular rule integration of a function y(x) given x
+
+    Parameters:
+    x: torch.tensor
+        x values
+    y: torch.tensor
+        y values
+    cumsum: bool    
+        If True, return the cumulative sum of the integral
+
+    Returns:
+    rectangular_integration: torch.tensor
+        Rectangular rule integration of y(x)
+    '''
+    dist = x[1:] - x[0:-1]
+    integrand = dist*y[:-1]
+    
+    if cumsum:
+        rectangular_integration = torch.cumsum(integrand, dim=0)
+    else:
+        rectangular_integration = torch.sum(integrand)
+    
+    return rectangular_integration
+
+
+def prod_exponential_rectangular(x, y):
+    '''
+    Compute the product of exponentials of a function y(x) given x
+
+    Parameters:
+    x: torch.tensor
+        x values
+    y: torch.tensor
+        y values
+
+    Returns:
+    prod_expo: torch.tensor
+        Product of exponentials of y(x)
+    '''
+    
+    dist = x[1:] - x[0:-1]
+    integrand = dist*y[:-1]
+    integrand = torch.exp(-integrand)
+    prod_expo = torch.cumprod(integrand, dim=0) # product of exponentials
+    return prod_expo
+
+def prod_exponential_trapezoid(x, y):
+    '''
+    Compute the product of exponentials of a function y(x) given x
+
+    Parameters:
+    x: torch.tensor
+        x values
+    y: torch.tensor
+        y values
+
+    Returns:
+    prod_expo: torch.tensor
+        Product of exponentials of y(x)
+    '''
+    
+    dist = x[1:] - x[0:-1]
+    integrand = dist*(y[1:] + y[0:-1]) / 2
+    integrand = torch.exp(-integrand)
+    prod_expo = torch.cumprod(integrand, dim=0) # product of exponentials
+    return prod_expo
 
 class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
@@ -23,7 +91,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             raw: output of NeRF, 2 values per sampled point
             z_vals: distance along the ray as measure from the origin
             """
-            wavelengths = wavelengths[:,None,:].repeat(1, z_vals.shape[1], 1)
+            wavelengths = wavelengths[:,None,:]
 
             # Difference between consecutive elements of `z_vals`. [n_rays, n_samples]
             # compute line element (dz) for integration
@@ -64,27 +132,17 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
             # Link to equation: https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
 
-            absorption_integral = density*absortpion_coefficients
+            
+            absorption = density*absortpion_coefficients
             # trapezoid rule
-            absorption_integral = 0.5*(absorption_integral[:, :-1, :]+absorption_integral[:, 1:, :])*dists[:,1:,None]
-            # cumulative sum
-            absorption_integral = -torch.cumsum(absorption_integral, dim=1)
+            absorption_integral = torch.cumulative_trapezoid(absorption, x=z_vals[:, 1:, :])
 
-            emission_integral = density.pow(2)*temperature_response
-            # use midpoint
-            emission_integral = 0.5*(emission_integral[:, :-1, :]+emission_integral[:, 1:, :])
-            # Compose the term
-            emission_integral = torch.exp(-absorption_integral)*emission_integral
+            emission = density.pow(2)*temperature_response
             # trapezoid rule
-            emission_integral = 0.5*(emission_integral[:, :-1,:]+emission_integral[:, 1:,:])*dists[:,1:-1,None]
+            emission_integral = torch.cumulative_trapezoid(emission, x=z_vals[:, 1:, :])
             # TODO: Check which dists should go here: dists[:,1:-1] or dists[:,2:]
 
             pixel_intensity = torch.exp(absorption_integral[:,-1,:])*emission_integral.sum(1)*raw[2]
-
-            for wavelength in torch.unique(wavelengths):
-                if wavelength > 0:
-                    wavelength_key = int(wavelength.detach().cpu().numpy().item())
-                    pixel_intensity[wavelengths[:,0,:]==wavelength] = self.channel_norms[wavelength_key](pixel_intensity[wavelengths[:,0,:]==wavelength])
                 
             # set the weigths to the intensity contributions
             weights = (nn.functional.relu(raw[0][...,0])*self.norm_rho).pow(1/self.pow_rho) + self.base_rho
