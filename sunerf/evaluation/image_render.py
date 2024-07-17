@@ -8,6 +8,9 @@ import numpy as np
 import sunpy.visualization.colormaps as cm
 from sunpy.map import Map, make_fitswcs_header
 from tqdm import tqdm
+from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
+from sunerf.evaluation.loader import ModelLoader
+from sunerf.model.stellar_model import SimpleStar
 
 class ImageRender:
     r"""Class to store poses, render images, and save video
@@ -97,7 +100,6 @@ class ImageRender:
             s_map.save(img_path, overwrite=True)
 
 
-
 def parse_args():
     # Commands 
     p = argparse.ArgumentParser(
@@ -117,6 +119,11 @@ if __name__ == '__main__':
     resolution = (resolution, resolution) * u.pix
     batch_size = args.batch_size
     output_format = args.output_format
+
+    DensityTemperatureRadiativeTransfer = DensityTemperatureRadiativeTransfer(1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    
+    
+
 
     os.makedirs(video_path, exist_ok=True)
 
