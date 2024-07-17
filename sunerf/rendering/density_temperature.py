@@ -133,17 +133,13 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             # Link to equation: https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
 
             
-            absorption = density*absortpion_coefficients
-            # trapezoid rule
+            absorption = density*absortpion_coefficients   #TODO: Check broadcasting
             absorption_integral = torch.cumulative_trapezoid(absorption, x=z_vals[:, 1:, :])
 
-            emission = density.pow(2)*temperature_response
-            # trapezoid rule
-            emission_integral = torch.cumulative_trapezoid(emission, x=z_vals[:, 1:, :])
-            # TODO: Check which dists should go here: dists[:,1:-1] or dists[:,2:]
+            emission = density.pow(2)*temperature_response   #TODO: Check broadcasting
+            pixel_intensity_term = torch.exp(-absorption_integral) * emission[1:]   #TODO: Check broadcasting
+            pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 2:, :])*raw[2]   # TODO: Check which z_vals should go here: z_vals[:,1:-1] or z_vals[:,2:]
 
-            pixel_intensity = torch.exp(absorption_integral[:,-1,:])*emission_integral.sum(1)*raw[2]
-                
             # set the weigths to the intensity contributions
             weights = (nn.functional.relu(raw[0][...,0])*self.norm_rho).pow(1/self.pow_rho) + self.base_rho
             weights = weights / (weights.sum(1)[:, None] + 1e-10)
