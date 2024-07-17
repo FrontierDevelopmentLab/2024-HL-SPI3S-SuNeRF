@@ -109,3 +109,12 @@ class SuNeRFLoader:
 
         output = torch.cat(out_list, 0).view(*target_shape, -1).numpy()
         return output
+
+
+class ModelLoader(SuNeRFLoader):
+    def __init__(self, rendering, model, device=None):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
+        self.device = device
+
+        self.rendering = nn.DataParallel(rendering).to(device)
+        self.model = nn.DataParallel(model).to(device)        
