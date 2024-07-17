@@ -12,7 +12,6 @@ from sunerf.data.date_util import normalize_datetime, unnormalize_datetime
 from sunerf.data.ray_sampling import get_rays
 from sunerf.train.coordinate_transformation import pose_spherical
 
-
 class SuNeRFLoader:
 
     def __init__(self, state_path, device=None):
@@ -111,10 +110,14 @@ class SuNeRFLoader:
         return output
 
 
-class ModelLoader(SuNeRFLoader):
-    def __init__(self, rendering, model, device=None):
+class ModelLoader(SuNeRFLoader):    
+    def __init__(self, rendering, model, ref_map, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
+        
         self.device = device
-
+        self.ref_map = ref_map
         self.rendering = nn.DataParallel(rendering).to(device)
-        self.model = nn.DataParallel(model).to(device)        
+        self.model = nn.DataParallel(model).to(device)   
+        self.seconds_per_dt = 1
+        self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+   

@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -113,19 +114,25 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
+    path_to_aia_file = "/mnt/disks/data/AIA/171/*.fits"
+    s_map = Map(path_to_aia_file)
+
     args = parse_args()
-    video_path = args.render_path
+    render_path = args.render_path
     resolution = args.resolution
     resolution = (resolution, resolution) * u.pix
     batch_size = args.batch_size
     output_format = args.output_format
 
-    DensityTemperatureRadiativeTransfer = DensityTemperatureRadiativeTransfer(1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
-    
-    
+    wavelengths = [171, 211] # TODO: change to instrument specific and multi-wavelength 
 
+    # initialization of density and temperature with simple star
+    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+    render = ImageRender(render_path)
+    avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
 
-    os.makedirs(video_path, exist_ok=True)
+    os.makedirs(render_path, exist_ok=True)
 
     n_points = 20
 
@@ -150,10 +157,11 @@ if __name__ == '__main__':
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
 
-        if output_format == 'jpg':
-            pass
+        for wavelength in wavelengths:
+            if output_format == 'jpg':
+                render.save_frame_as_jpg(i, outputs, wavelength)
 
-        elif output_format == 'fits':
-            pass
-        else:
-            print('No valid format selected')
+            elif output_format == 'fits':
+                pass
+            else:
+                print('No valid format selected')

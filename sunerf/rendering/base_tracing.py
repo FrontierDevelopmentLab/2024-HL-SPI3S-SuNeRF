@@ -2,8 +2,8 @@ import torch
 from torch import nn
 
 from sunerf.model.model import NeRF
+from sunerf.model.stellar_model import SimpleStar
 from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler
-
 
 class SuNeRFRendering(nn.Module):
 

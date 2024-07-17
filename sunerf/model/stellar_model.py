@@ -27,6 +27,7 @@ class SimpleStar(nn.Module):
         aia_response_path : string
             path to file containing SDO/AIA temperature resp. functions
         """
+        super().__init__()
         self.h0 = h0
         self.t0 = t0
         self.R_s = R_s
@@ -54,9 +55,9 @@ class SimpleStar(nn.Module):
             temp (float): Temperature at x,y,z,t
         """
 
-        x = query_points[:,:,0]
-        y = query_points[:,:,1]
-        z = query_points[:,:,2]
+        x = query_points[:,0]
+        y = query_points[:,1]
+        z = query_points[:,2]
 
         # Radius (distance from the center of the sphere) in solar radii
         radius = torch.sqrt(x**2 + y**2 + z**2)
@@ -98,6 +99,6 @@ class SimpleStar(nn.Module):
         volumetric_constant = torch.tensor(25.0)
 
         # Output density, temperature, absortpion and volumetric constant
-        return torch.stack((rho,temp), dim=-1).to(self.model_device), log_absortpion.to(self.model_device), volumetric_constant.to(self.model_device)
+        return {'rho_T': torch.stack((rho,temp), dim=-1), 'log_abs': log_absortpion, 'vol_c': volumetric_constant} # removed to model device
 
 
