@@ -12,7 +12,7 @@ import sunpy
 # from s4pi.maps.train.sampling import sample_non_uniform_box as sample_stratified
 # from s4pi.maps.train.volume_render import volume_render
 
-class simple_star(nn.Module):
+class SimpleStar(nn.Module):
     r""" Simple star that pretends to be a fully trained nerf
     """
     def __init__(self, h0=60*u.Mm, t0=1.4e6*u.K, R_s=1.02*u.solRad, t_photosphere = 5777*u.K,

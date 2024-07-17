@@ -7,7 +7,7 @@ from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, Stratif
 
 class SuNeRFRendering(nn.Module):
 
-    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, model_config=None):
+    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, model_config=None): # TODO: adopt do be used for different models
         super().__init__()
         self.Rs_per_ds = Rs_per_ds
 
