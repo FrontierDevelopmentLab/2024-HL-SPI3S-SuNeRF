@@ -109,6 +109,13 @@ def parse_args():
     p.add_argument('--resolution', type=int, default=512)
     p.add_argument('--batch_size', type=int, default=4096)
     p.add_argument('--output_format', type=str, default='jpg')
+    p.add_argument(
+        "--wavelengths",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Wavelengths to render",
+    )    
 
     args = p.parse_args()
     return args
@@ -123,8 +130,7 @@ if __name__ == '__main__':
     resolution = (resolution, resolution) * u.pix
     batch_size = args.batch_size
     output_format = args.output_format
-
-    wavelengths = [171, 211] # TODO: change to instrument specific and multi-wavelength 
+    wavelengths = args.wavelengths # TODO: change to instrument specific and multi-wavelength 
 
     # initialization of density and temperature with simple star
     rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
