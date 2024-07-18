@@ -88,7 +88,7 @@ class SuNeRFRendering(nn.Module):
         distance = query_points.pow(2).sum(-1).pow(0.5)
         height_map = (weights * distance).sum(-1)
         # penalize absorption past 1.2 solar radii
-        regularization = torch.relu(distance - 1.2 / self.Rs_per_ds) * (1 - absorption)
+        regularization = torch.relu(distance[:,:,None] - 1.2 / self.Rs_per_ds) * (1 - absorption)
 
         # Store outputs.
         outputs['image'] = image
