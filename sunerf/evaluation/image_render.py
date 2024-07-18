@@ -47,7 +47,7 @@ class ImageRender:
         if not os.path.exists(img_path):
             image = model_output/np.mean(model_output)
             cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
-            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=1)
+            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.max(image))
 
 
     def save_frame_as_fits(self, i, point, model_output, wavelength, half_fov=1.3, itype='imager', obs_date='2014-04-01T00:00:00.000'):
