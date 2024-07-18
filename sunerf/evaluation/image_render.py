@@ -164,9 +164,9 @@ if __name__ == '__main__':
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
 
-        for i, wavelength in enumerate(wavelengths):
+        for n, wavelength in enumerate(wavelengths):
             if output_format == 'jpg':
-                render.save_frame_as_jpg(i, outputs['image'][:,:,i], wavelength)
+                render.save_frame_as_jpg(i, outputs['image'][:,:,n], wavelength)
 
             elif output_format == 'fits':
                 pass
