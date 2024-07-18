@@ -139,11 +139,11 @@ if __name__ == '__main__':
 
     os.makedirs(render_path, exist_ok=True)
 
-    n_points = 20
+    n_points = 60
 
     points_1 = zip(np.ones(n_points) * 0,
-                np.linspace(0, 360, n_points),
-                np.ones(n_points),
+                np.ones(n_points) * 0,
+                np.linspace(1.5, 0.2, n_points),
                 [avg_time] * n_points)
 
     points_2 = zip(np.ones(n_points) * 0,
@@ -157,7 +157,7 @@ if __name__ == '__main__':
                 [avg_time] * n_points )
 
     # combine coordinates
-    points = list(points_1) + list(points_2) + list(points_3)
+    points = list(points_1) #+ list(points_2) + list(points_3)
 
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
