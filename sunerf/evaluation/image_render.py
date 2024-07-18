@@ -27,7 +27,7 @@ class ImageRender:
         """
         self.render_path = render_path
 
-    def save_frame_as_jpg(self, i, model_outputs, wavelength, itype='imager'):
+    def save_frame_as_jpg(self, i, model_output, wavelength, itype='imager'):
         r"""Method that saves an image from a viewpoint as the ith frame
         Args
         ------
@@ -45,8 +45,9 @@ class ImageRender:
         img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
         if not os.path.exists(img_path):
+            image = model_output/np.mean(model_output)
             cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
-            plt.imsave(img_path, model_outputs['pixel_intensity'], cmap=cmap, vmin=0, vmax=1)
+            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=1)
 
 
     def save_frame_as_fits(self, i, point, model_outputs, wavelength, half_fov=1.3, itype='imager', obs_date='2014-04-01T00:00:00.000'):
@@ -163,9 +164,9 @@ if __name__ == '__main__':
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
 
-        for wavelength in wavelengths:
+        for i, wavelength in enumerate(wavelengths):
             if output_format == 'jpg':
-                render.save_frame_as_jpg(i, outputs, wavelength)
+                render.save_frame_as_jpg(i, outputs['image'][:,:,i], wavelength)
 
             elif output_format == 'fits':
                 pass
