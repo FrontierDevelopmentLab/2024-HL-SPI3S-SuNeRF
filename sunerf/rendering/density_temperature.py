@@ -77,13 +77,14 @@ def prod_exponential_trapezoid(x, y):
 
 class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
-    def __init__(self, wavelengths, model_config=None, device=None, aia_exp_time=2.9, **kwargs):
+    def __init__(self, wavelengths, model_config=None, device=None, aia_exp_time=2.9, pixel_intensity_factor=1e10, **kwargs):
         model_config = {} if model_config is None else model_config
         super().__init__(model_config=model_config, **kwargs)
     
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
         self.device = device
         self.wavelengths = torch.tensor(wavelengths).to(device)
+        self.pixel_intensity_factor = pixel_intensity_factor
     
         aia_resp = read_genx("sunerf/data/aia_temp_resp.genx")
         self.response = {}
@@ -160,7 +161,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             for wavelength in torch.unique(wavelengths):
                 if wavelength > 0:
                     wavelength_key = str(int(wavelength.detach().cpu().numpy().item()))
-                    absortpion_coefficients[wavelengths==wavelength] = torch.float_power(10, -(nn.functional.relu(log_abs[wavelength_key]))) # removed base_abs
+                    absortpion_coefficients[wavelengths==wavelength] = torch.float_power(10, -(nn.functional.relu(log_abs[wavelength_key]))).float() # removed base_abs
 
             # Link to equation: https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
             
@@ -169,7 +170,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
             emission = density.pow(2)*temperature_response
             pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,1:,:]   #TODO: Check which emission indexes should go here
-            pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1) * vol_c   # TODO: Check which z_vals indexes should go here
+            pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1) * vol_c * self.pixel_intensity_factor   # TODO: Check which z_vals indexes should go here
 
             # set the weigths to the intensity contributions
             weights = (nn.functional.relu(rho_T[...,0]))
