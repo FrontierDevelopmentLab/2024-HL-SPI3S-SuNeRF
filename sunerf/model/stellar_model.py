@@ -73,7 +73,7 @@ class SimpleStar(nn.Module):
         rho[less_than_index] = self.rho_0.value
         # If radius is greater than 1 solar radii...
         rho[else_index] = self.rho_0.value * torch.exp(1/self.h0.to(u.solRad).value*(1/radius[else_index]-1)) #See equation 4 in Pascoe et al. 2019
-        rho = torch.log10(rho)-self.base_rho
+        rho = torch.log(rho)
 
         # Simple temperature model (depends on radius)
         # If radius is less then 1 solar radii...
@@ -84,16 +84,16 @@ class SimpleStar(nn.Module):
         # If radius is greater than R_s solar radii, use constant...
         out_sun_index = radius > self.R_s.value
         temp[out_sun_index]= self.t0.value
-        temp = torch.log10(temp)-self.base_temp
+        temp = torch.log10(temp)
 
         log_absortpion = nn.ParameterDict([
-                                        ['94',  torch.tensor(4.4, dtype=torch.float32)],
-                                        ['131', torch.tensor(4.2, dtype=torch.float32)],
-                                        ['171', torch.tensor(4.0, dtype=torch.float32)],
-                                        ['193', torch.tensor(3.8, dtype=torch.float32)],
-                                        ['211', torch.tensor(3.6, dtype=torch.float32)],
-                                        ['304', torch.tensor(3.4, dtype=torch.float32)],
-                                        ['335', torch.tensor(3.2, dtype=torch.float32)]
+                                        ['94',  torch.tensor(20.4, dtype=torch.float32)],
+                                        ['131', torch.tensor(20.2, dtype=torch.float32)],
+                                        ['171', torch.tensor(20.0, dtype=torch.float32)],
+                                        ['193', torch.tensor(19.8, dtype=torch.float32)],
+                                        ['211', torch.tensor(19.6, dtype=torch.float32)],
+                                        ['304', torch.tensor(19.4, dtype=torch.float32)],
+                                        ['335', torch.tensor(19.2, dtype=torch.float32)]
                                 ])
 
         volumetric_constant = torch.tensor(25.0)
