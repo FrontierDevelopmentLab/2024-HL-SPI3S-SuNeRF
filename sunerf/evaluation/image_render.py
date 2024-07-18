@@ -111,7 +111,7 @@ def parse_args():
     p.add_argument('--output_format', type=str, default='jpg')
     p.add_argument(
         "--wavelengths",
-        type=str,
+        type=int,
         nargs="+",
         default=None,
         help="Wavelengths to render",
