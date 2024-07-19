@@ -1,16 +1,6 @@
-import numpy as np
 import torch
 from torch import nn
 import astropy.units as u
-import matplotlib.pyplot as plt
-import sunpy
-
-# from s4pi.maps.train.heliocentric_cartesian_transformation import pose_spherical
-# from s4pi.maps.train.parallel_ray_sampling import get_rays
-# from s4pi.maps.train.coordinate_transformation import pose_spherical
-# from s4pi.maps.train.ray_sampling import get_rays
-# from s4pi.maps.train.sampling import sample_non_uniform_box as sample_stratified
-# from s4pi.maps.train.volume_render import volume_render
 
 class SimpleStar(nn.Module):
     r""" Simple star that pretends to be a fully trained nerf
