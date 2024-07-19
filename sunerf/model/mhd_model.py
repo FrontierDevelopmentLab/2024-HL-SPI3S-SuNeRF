@@ -98,7 +98,7 @@ class MHDModel(nn.Module):
             output_density[mask] = (1-frame_fraction)*f1_rho + frame_fraction*f2_rho
             output_temperature[mask] = (1-frame_fraction)*f1_t + frame_fraction*f2_t
 
-
+            # TODO: make mhd render (maybe make another class or file?)
 
         # Output density, temperature, absortpion and volumetric constant
         return {'rho_T': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
