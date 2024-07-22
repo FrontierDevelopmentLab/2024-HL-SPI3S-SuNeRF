@@ -1,10 +1,10 @@
 import torch
 from torch import nn
-import astropy.units as u
 import glob
 import os
-from sunerf.data.mhd import rdhdf_3d
+from sunerf.data.mhd.psi_io import rdhdf_3d
 from scipy.interpolate import RegularGridInterpolator as rgi
+import numpy as np
 
 class MHDModel(nn.Module):
     r""" Interpolation of MHD model such that it behaves like a trained NeRF
@@ -60,43 +60,50 @@ class MHDModel(nn.Module):
         z = query_points[:,2]
         t = query_points[:,3]
 
+        # Convert to spherical coordinates
+        r = torch.sqrt(x**2 + y**2 + z**2)
+
+        th = torch.arccos(z/r)
+        phi = torch.arctan2(y,x)
+        phi[phi<0] += 2*np.pi
+
         output_density = torch.zeros_like(x)
         output_temperature = torch.zeros_like(x)
 
         # loop over only unique times
-        for time in torch.uniqe(t):
+        for time in torch.unique(t):
             f1 = time * (self.flast - self.ffirst) + self.ffirst
             frame_fraction = f1 - int(f1)
-            f2 = torch.ceil(f1).astype(torch.int)
-            f1 = torch.floor(f1).astype(torch.int)
+            f2 = torch.ceil(f1).type(torch.int)
+            f1 = torch.floor(f1).type(torch.int)
 
-            # open files and read x, y, z, f for rho, t
-            x1_rho, y1_rho, z1_rho, rho1 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f1}.h5'))
-            x1_t, y1_t, z1_t, t1 = rdhdf_3d(os.path.join(self.data_path, 'rho', f't00{f1}.h5'))
-            x2_rho, y2_rho, z2_rho, rho2 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f2}.h5'))
-            x2_t, y2_t, z2_t, t2 = rdhdf_3d(os.path.join(self.data_path, 'rho', f't00{f2}.h5'))
+            # open files; read x_mhd, y_mhd, z_mhd, f; and interpolate for rho, t
+            r_mhd, th_mhd, phi_mhd, rho1 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f1}.h5'))
+            f1_rho_interp = rgi((phi_mhd, th_mhd, r_mhd), rho1, bounds_error=False, fill_value=1e-10)
 
-            # create interpolating function in space for each file for rho, t
-            f1_rho_interp = rgi((x1_rho, y1_rho, z1_rho), rho1)
-            f1_t_interp = rgi((x1_t, y1_t, z1_t), t1)
-            f2_rho_interp = rgi((x2_rho, y2_rho, z2_rho), rho2)
-            f2_t_interp = rgi((x2_t, y2_t, z2_t), t2)
+            r_mhd, th_mhd, phi_mhd, t1 = rdhdf_3d(os.path.join(self.data_path, 't', f't00{f1}.h5'))
+            f1_t_interp = rgi((phi_mhd, th_mhd, r_mhd), t1, bounds_error=False, fill_value=1e-10)
+
+            r_mhd, th_mhd, phi_mhd, rho2 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f2}.h5'))
+            f2_rho_interp = rgi((phi_mhd, th_mhd, r_mhd), rho2, bounds_error=False, fill_value=1e-10)
+
+            r_mhd, th_mhd, phi_mhd, t2 = rdhdf_3d(os.path.join(self.data_path, 't', f't00{f2}.h5'))
+            f2_t_interp = rgi((phi_mhd, th_mhd, r_mhd), t2, bounds_error=False, fill_value=1e-10)
 
             # define logical mask to make interpolation
-            mask = (t == time)
-            x_mask = x[mask]
-            y_mask = y[mask]
-            z_mask = z[mask]
+            mask = (t == time).cpu().numpy()
+            r_mask = r[mask].cpu().numpy()
+            th_mask = th[mask].cpu().numpy()
+            phi_mask = phi[mask].cpu().numpy()
 
             # apply mask
-            # TODO: reshape out of tensor
-            f1_rho = f1_rho_interp((x_mask, y_mask, z_mask))
-            f1_t = f1_t_interp((x_mask, y_mask, z_mask))
-            f2_rho = f2_rho_interp((x_mask, y_mask, z_mask))
-            f2_t = f2_t_interp((x_mask, y_mask, z_mask))
+            f1_rho = torch.Tensor(f1_rho_interp((phi_mask, th_mask, r_mask))).to(t.device)
+            f1_t = torch.Tensor(f1_t_interp((phi_mask, th_mask, r_mask))).to(t.device)
+            f2_rho = torch.Tensor(f2_rho_interp((phi_mask, th_mask, r_mask))).to(t.device)
+            f2_t = torch.Tensor(f2_t_interp((phi_mask, th_mask, r_mask))).to(t.device)
             
-            output_density[mask] = (1-frame_fraction)*f1_rho + frame_fraction*f2_rho
-            output_temperature[mask] = (1-frame_fraction)*f1_t + frame_fraction*f2_t
+            output_density[mask] = torch.log((1-frame_fraction)*f1_rho + frame_fraction*f2_rho)
+            output_temperature[mask] = torch.log10(1e6*((1-frame_fraction)*f1_t + frame_fraction*f2_t))
 
             # TODO: make mhd render (maybe make another class or file?)
 
