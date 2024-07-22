@@ -120,4 +120,42 @@ class ModelLoader(SuNeRFLoader):
         self.model = nn.DataParallel(model).to(device)   
         self.seconds_per_dt = 1
         self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-   
+
+    @torch.no_grad()
+    def load_observer_image(self, lat: u, lon: u, time: float,
+                            distance = (1 * u.AU).to(u.solRad),
+                            center: Tuple[float, float, float] = None, resolution=None,
+                            batch_size: int = 4096):
+        # convert to pose
+        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
+        # load rays
+        if resolution is not None:
+            ref_map = self.ref_map.resample(resolution)
+            img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
+        else:
+            img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
+
+        rays_o, rays_d = get_rays(img_coords, target_pose)
+        rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
+
+        img_shape = rays_o.shape[:2]
+        flat_rays_o = rays_o.reshape([-1, 3]).to(self.device)
+        flat_rays_d = rays_d.reshape([-1, 3]).to(self.device)
+
+        # time = normalize_datetime(time, self.seconds_per_dt, self.ref_time)
+        flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
+        # make batches
+        rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
+            torch.split(flat_rays_d, batch_size), \
+            torch.split(flat_time, batch_size)
+
+        outputs = {}
+        for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
+            b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+            for k, v in b_outs.items():
+                if k not in outputs:
+                    outputs[k] = []
+                outputs[k].append(v)
+
+        results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
+        return results        
