@@ -13,6 +13,7 @@ def normalize_datetime(date, seconds_per_dt, ref_time):
     -------
     normalized date
     """
+
     return (date - ref_time).total_seconds() / seconds_per_dt
 
 

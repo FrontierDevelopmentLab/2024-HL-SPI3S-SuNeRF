@@ -2,12 +2,12 @@ import torch
 from torch import nn
 
 from sunerf.model.model import NeRF
+from sunerf.model.stellar_model import SimpleStar
 from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler
-
 
 class SuNeRFRendering(nn.Module):
 
-    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model_config=None):
+    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, model_config=None): # TODO: adopt do be used for different models
         super().__init__()
         self.Rs_per_ds = Rs_per_ds
 
@@ -34,8 +34,8 @@ class SuNeRFRendering(nn.Module):
             raise ValueError(f'Unknown sampling type {hierarchical_sampling_type}')
 
         # setup models
-        self.coarse_model = NeRF(**model_config)
-        self.fine_model = NeRF(**model_config)
+        self.coarse_model = model(**model_config)
+        self.fine_model = model(**model_config)
 
     def forward(self, rays_o, rays_d, times):
         r"""_summary_
@@ -88,7 +88,7 @@ class SuNeRFRendering(nn.Module):
         distance = query_points.pow(2).sum(-1).pow(0.5)
         height_map = (weights * distance).sum(-1)
         # penalize absorption past 1.2 solar radii
-        regularization = torch.relu(distance - 1.2 / self.Rs_per_ds) * (1 - absorption)
+        regularization = torch.relu(distance[:,:,None] - 1.2 / self.Rs_per_ds) * (1 - absorption)
 
         # Store outputs.
         outputs['image'] = image
