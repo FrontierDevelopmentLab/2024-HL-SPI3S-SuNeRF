@@ -12,6 +12,7 @@ from tqdm import tqdm
 from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
+from sunerf.model.mhd_model import MHDModel
 
 class ImageRender:
     r"""Class to store poses, render images, and save video
@@ -45,9 +46,9 @@ class ImageRender:
         img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
         if not os.path.exists(img_path):
-            image = model_output/np.mean(model_output)
+            image = model_output/np.nanmean(model_output)
             cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
-            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.max(image))
+            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
 
 
     def save_frame_as_fits(self, i, point, model_output, wavelength, half_fov=1.3, itype='imager', obs_date='2014-04-01T00:00:00.000'):
@@ -132,7 +133,8 @@ if __name__ == '__main__':
     wavelengths = args.wavelengths # TODO: change to instrument specific and multi-wavelength 
 
     # initialization of density and temperature with simple star
-    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    # rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
     loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
     render = ImageRender(render_path)
     avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
@@ -141,10 +143,10 @@ if __name__ == '__main__':
 
     n_points = 60
 
-    points_1 = zip(np.ones(n_points) * 0,
-                np.ones(n_points) * 0,
-                np.linspace(1.5, 0.2, n_points),
-                [avg_time] * n_points)
+    points_1 = zip(np.linspace(-25, 25, n_points),
+                np.linspace(0, 45, n_points),
+                np.linspace(1.5, 0.8, n_points),
+                np.linspace(0, 1, n_points))
 
     points_2 = zip(np.ones(n_points) * 0,
                 np.linspace(0, 360, n_points),
