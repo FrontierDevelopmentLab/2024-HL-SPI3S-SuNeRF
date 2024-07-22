@@ -62,11 +62,11 @@ class MHDModel(nn.Module):
 
         # Convert to spherical coordinates
         r = torch.sqrt(x**2 + y**2 + z**2)
-
         th = torch.arccos(z/r)
         phi = torch.arctan2(y,x)
         phi[phi<0] += 2*np.pi
 
+        # initilaize output tensors filled with zeros with shape x
         output_density = torch.zeros_like(x)
         output_temperature = torch.zeros_like(x)
 
@@ -78,6 +78,8 @@ class MHDModel(nn.Module):
             f1 = torch.floor(f1).type(torch.int)
 
             # open files; read x_mhd, y_mhd, z_mhd, f; and interpolate for rho, t
+            # applying RegularGridInterpolator as rgi
+            # TODO: Investigate interpolation of values at query points
             r_mhd, th_mhd, phi_mhd, rho1 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f1}.h5'))
             f1_rho_interp = rgi((phi_mhd, th_mhd, r_mhd), rho1, bounds_error=False, fill_value=1e-10)
 

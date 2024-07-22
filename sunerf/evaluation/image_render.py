@@ -132,15 +132,20 @@ if __name__ == '__main__':
     output_format = args.output_format
     wavelengths = args.wavelengths # TODO: change to instrument specific and multi-wavelength 
 
+    # Initialization of the density and temperature model (Simple star analytical model or MHD model)
     # initialization of density and temperature with simple star
-    # rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
-    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
+    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    # rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
+    # Compute pixel intensity for a given model
     loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+    # Render = Save pixel intensity as an image (jpeg)
+    #          Save pixel intensity and observer coordinates as a fits file
     render = ImageRender(render_path)
     avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
 
     os.makedirs(render_path, exist_ok=True)
 
+    # Generate coordinates for the observer
     n_points = 60
 
     points_1 = zip(np.linspace(-25, 25, n_points),

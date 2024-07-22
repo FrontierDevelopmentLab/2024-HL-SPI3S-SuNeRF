@@ -152,6 +152,7 @@ class ModelLoader(SuNeRFLoader):
         outputs = {}
         for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
             b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+            # TODO: Figure out the meaning of k, v
             for k, v in b_outs.items():
                 if k not in outputs:
                     outputs[k] = []
