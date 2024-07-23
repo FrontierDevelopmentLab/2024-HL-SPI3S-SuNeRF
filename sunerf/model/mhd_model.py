@@ -3,7 +3,7 @@ from torch import nn
 import glob
 import os
 from sunerf.data.mhd.psi_io import rdhdf_3d
-from scipy.interpolate import RegularGridInterpolator as rgi
+from scipy.interpolate import RegularGridInterpolator as rgi  
 import numpy as np
 
 class MHDModel(nn.Module):
@@ -103,6 +103,26 @@ class MHDModel(nn.Module):
             f1_t = torch.Tensor(f1_t_interp((phi_mask, th_mask, r_mask))).to(t.device)
             f2_rho = torch.Tensor(f2_rho_interp((phi_mask, th_mask, r_mask))).to(t.device)
             f2_t = torch.Tensor(f2_t_interp((phi_mask, th_mask, r_mask))).to(t.device)
+
+            # check stats
+            print(' ')
+            print('Timesteps: ', f1, f2)
+            ii = np.where(rho1 < 0)
+            print('Number of negative pixels: ', len(ii[0]), rho1.shape)
+            print(f'rho1 - min: {np.amin(rho1)} max: {np.amax(rho1)}')
+            print(f'rho2 - min: {np.amin(rho2)} max: {np.amax(rho2)}')
+            print(f't1 - min: {np.amin(t1)} max: {np.amax(t1)}')
+            print(f't2- min: {np.amin(t2)} max: {np.amax(t2)}')
+
+            print(
+                f'rho1 (interp) - min: {np.amin(f1_rho_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f1_rho_interp((phi_mask, th_mask, r_mask)))}')
+            print(
+                f'rho2 (interp) - min: {np.amin(f2_rho_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f2_rho_interp((phi_mask, th_mask, r_mask)))}')
+            print(
+                f't1 (interp) - min: {np.amin(f1_t_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f1_t_interp((phi_mask, th_mask, r_mask)))}')
+            print(
+                f't2 (interp) min: {np.amin(f2_t_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f2_t_interp((phi_mask, th_mask, r_mask)))}')
+            print(' ')
             
             output_density[mask] = torch.log((1-frame_fraction)*f1_rho + frame_fraction*f2_rho)
             output_temperature[mask] = torch.log10(1e6*((1-frame_fraction)*f1_t + frame_fraction*f2_t))

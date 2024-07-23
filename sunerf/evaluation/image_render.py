@@ -57,13 +57,13 @@ class ImageRender:
         img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
         # Save image if it doesn't exist
-        if not os.path.exists(img_path):
-            # Normalize the image
-            image = model_output/np.nanmean(model_output)  # TODO: Consider normalizing over full time sequence
-            # Get the colormap
-            cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
-            # Save the image
-            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
+        # if not os.path.exists(img_path):
+        # Normalize the image
+        image = model_output/np.nanmean(model_output)  # TODO: Consider normalizing over full time sequence
+        # Get the colormap
+        cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
+        # Save the image
+        plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
 
     def save_frame_as_fits(self, i, point, model_output, wavelength, half_fov=1.3,
                            itype='imager', obs_date='2014-04-01T00:00:00.000'):
@@ -96,7 +96,6 @@ class ImageRender:
 
         # Create output directory if it doesn't exist
         output_path = f"{self.render_path}/{itype}/{wavelength}"
-        # Why is this check happening twice (here and save_frame_as above)?
         os.makedirs(output_path, exist_ok=True)
         # Save image as fits
         img_path = f'{output_path}/{str(i).zfill(3)}_w{wavelength}_lat{np.round(lat,1)}_lon{np.round(lon,1)}_r{np.round(d,2)}_T{(time.strftime("%Y%m%d-%H%M"))}.fits'
@@ -161,9 +160,10 @@ def parse_args():
     p = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--render_path', type=str)
-    p.add_argument('--resolution', type=int, default=512)
+    p.add_argument('--resolution', type=int, default=256) 
     p.add_argument('--batch_size', type=int, default=4096)
     p.add_argument('--output_format', type=str, default='jpg')
+    p.add_argument('--model', type=str, default='SimpleStar' )
     p.add_argument(
         "--wavelengths",
         type=int,
@@ -207,16 +207,21 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     output_format = args.output_format
     wavelengths = args.wavelengths  # TODO: change to instrument specific and multi-wavelength
+    model = args.model
 
     # Path to AIA files
     path_to_aia_file = "/mnt/disks/data/AIA/171/*.fits"
     s_map = Map(path_to_aia_file)
 
     # Initialization of the density and temperature model (Simple star analytical model or MHD model)
-    # initialization of density and temperature with simple star
-    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    # initialization of density and temperature with simple star 
+    if model=='SimpleStar':
+        rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None)  # TODO: explic. define star properties
+    elif model=='MHDModel':
+        rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
+    
     # ALTERNATIVE : MHD model (alternately commenting out)
-    # rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
+    
     # Compute pixel intensity for a given model
     loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
     # Render = Save pixel intensity as an image (jpeg)
@@ -230,7 +235,7 @@ if __name__ == '__main__':
 
     # Generate coordinates for the observer
     # Number of points to generate
-    n_points = 60
+    n_points = 2  # 60
 
     points_1 = zip(np.linspace(-25, 25, n_points),
                 np.linspace(0, 45, n_points),
@@ -247,7 +252,7 @@ if __name__ == '__main__':
                 np.linspace(1, 0.2, n_points),
                 [avg_time] * n_points )
 
-    # combine coordinates
+    # combine coordinates  #TODO combine from different instruments
     points = list(points_1) #+ list(points_2) + list(points_3)
 
     # Iterate over the unpacked point coordinates

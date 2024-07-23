@@ -91,6 +91,7 @@ class SuNeRFLoader:
 
         outputs = {}
         # iterate over batches
+        # b = batches
         for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
             b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
             # iterate over outputs 
@@ -111,7 +112,7 @@ class SuNeRFLoader:
     def unnormalize_datetime(self, time):
         return unnormalize_datetime(time, self.seconds_per_dt, self.ref_time)
 
-    # This is the same as before. Reason for repetition in the code structure?
+    # Disabling gradient calculation
     @torch.no_grad()
     def load_coords(self, query_points_npy, batch_size=2048):
         target_shape = query_points_npy.shape[:-1]
