@@ -10,6 +10,7 @@ import sunpy.visualization.colormaps as cm
 from sunpy.map import Map, make_fitswcs_header
 from tqdm import tqdm
 from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
+# For density and temperature rendering
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
@@ -26,6 +27,7 @@ class ImageRender:
         video_args : string
             path to hyperperams.yaml file with training configuration
         """
+        # Path to save rendered images 
         self.render_path = render_path
 
     def save_frame_as_jpg(self, i, model_output, wavelength, itype='imager'):
@@ -40,13 +42,16 @@ class ImageRender:
             wavelength of image to render
         """
 
-        # Only do image if it doesn't exist
+        # Only save image if it doesn't exist
         output_path =  f"{self.render_path}/{itype}/{wavelength}"
+        # Create output directory if it doesn't exist
         os.makedirs(output_path, exist_ok=True)
         img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
         if not os.path.exists(img_path):
+            # Normalize the image
             image = model_output/np.nanmean(model_output)
+            # Get the colormap
             cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
             plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
 
@@ -63,10 +68,13 @@ class ImageRender:
             half size field of view in solar radii 
         """
 
+        # Unpack or separate the point coordinates
         lat, lon, d, time = point
 
         # save result image
         output_path =  f"{self.render_path}/{itype}/{wavelength}"
+        # Create output directory if it doesn't exist
+        # Why is this check happening twice (here and save_frame_as above)?
         os.makedirs(output_path, exist_ok=True)
         img_path = f'{output_path}/{str(i).zfill(3)}_w{wavelength}_lat{np.round(lat,1)}_lon{np.round(lon,1)}_r{np.round(d,2)}_T{(time.strftime("%Y%m%d-%H%M"))}.fits'
 
@@ -75,13 +83,14 @@ class ImageRender:
 
             # Create new header
             new_observer = SkyCoord(-lon*u.deg, lat*u.deg, d*u.AU, obstime=obs_date, frame='heliographic_stonyhurst')
-
+            # Get the shape of the output image
             out_shape = model_output.shape
             out_ref_coord = SkyCoord(0*u.arcsec, 0*u.arcsec, obstime=new_observer.obstime,
                                     frame='helioprojective', observer=new_observer,
                                     rsun=696000*u.km)
 
             scale = 360/np.pi*np.tan(((half_fov*u.solRad*d)/(1 * u.AU).to(u.solRad)).value)/out_shape[0] * u.deg
+            # Convert scale to arcsec per pixel
             scale = scale.to(u.arcsec)/u.pix
 
             out_header = make_fitswcs_header(
@@ -135,17 +144,21 @@ if __name__ == '__main__':
     # Initialization of the density and temperature model (Simple star analytical model or MHD model)
     # initialization of density and temperature with simple star
     rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
+    # ALTERNATIVE : MHD model (alternately commenting out)
     # rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
     # Compute pixel intensity for a given model
     loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
     # Render = Save pixel intensity as an image (jpeg)
-    #          Save pixel intensity and observer coordinates as a fits file
+    # Save pixel intensity and observer coordinates as a fits file
     render = ImageRender(render_path)
     avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
 
+    # Create render path directory if it doesnt exist. 
+    # Again ?
     os.makedirs(render_path, exist_ok=True)
 
     # Generate coordinates for the observer
+    # Number of points to generate
     n_points = 60
 
     points_1 = zip(np.linspace(-25, 25, n_points),
@@ -166,15 +179,20 @@ if __name__ == '__main__':
     # combine coordinates
     points = list(points_1) #+ list(points_2) + list(points_3)
 
+    # Iterate over the unpacked point coordinates
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
-
+        
+        # Iterate over wavelengths
         for n, wavelength in enumerate(wavelengths):
             if output_format == 'jpg':
+                # Save as jpg
                 render.save_frame_as_jpg(i, outputs['image'][:,:,n], wavelength)
 
             elif output_format == 'fits':
                 # i, point, model_output, wavelength,
+                # Save as FITS
                 render.save_frame_as_fits(i, (lat, lon, d, time), outputs['image'][:,:,n], wavelength, obs_date=avg_time)
             else:
+                # Print error if format is invalid
                 print('No valid format selected')

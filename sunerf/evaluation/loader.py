@@ -8,6 +8,7 @@ from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
 
+# For date normalization utilities
 from sunerf.data.date_util import normalize_datetime, unnormalize_datetime
 from sunerf.data.ray_sampling import get_rays
 from sunerf.train.coordinate_transformation import pose_spherical
@@ -20,22 +21,32 @@ class SuNeRFLoader:
 
         state = torch.load(state_path)
         data_config = state['data_config']
+        # Store data configuration
         self.config = data_config
+        # Store wavelength
         self.wavelength = data_config['wavelength']
         self.times = data_config['times']
+        # Store World Coordinate System info
         self.wcs = data_config['wcs']
         self.resolution = data_config['resolution']
 
+        # get rendering model
         rendering = state['rendering']
+        # Parallelize and move to device
         self.rendering = nn.DataParallel(rendering).to(device)
         model = rendering.fine_model
         self.model = nn.DataParallel(model).to(device)
 
+        # Get seconds per delta time
         self.seconds_per_dt = state['seconds_per_dt']
+        # Get solar radii per data scale
         self.Rs_per_ds = state['Rs_per_ds']
+        # Convert to megameters per data scale
         self.Mm_per_ds = self.Rs_per_ds * (1 * u.R_sun).to_value(u.Mm)
+        # Get reference time
         self.ref_time = state['ref_time']
 
+        # Reference map
         ref_map = Map(np.zeros(self.resolution), self.wcs)
         self.ref_map = ref_map
 
@@ -47,6 +58,7 @@ class SuNeRFLoader:
     def end_time(self):
         return np.max(self.times)
 
+    # Disable gradient calculation
     @torch.no_grad()
     def load_observer_image(self, lat: u, lon: u, time: datetime,
                             distance = (1 * u.AU).to(u.solRad),
@@ -56,11 +68,13 @@ class SuNeRFLoader:
         target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
         # load rays
         if resolution is not None:
+            # Resample map to desired resolution
             ref_map = self.ref_map.resample(resolution)
             img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
         else:
             img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
 
+        # get rays from coordinates and pose
         rays_o, rays_d = get_rays(img_coords, target_pose)
         rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
 
@@ -76,22 +90,28 @@ class SuNeRFLoader:
             torch.split(flat_time, batch_size)
 
         outputs = {}
+        # iterate over batches
         for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
             b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+            # iterate over outputs 
             for k, v in b_outs.items():
                 if k not in outputs:
+                    # initialise list if key is not in outputs
                     outputs[k] = []
                 outputs[k].append(v)
-
+        # concatenate and reshape outputs
         results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
         return results
 
+    # normalizing datetime
     def normalize_datetime(self, time):
         return normalize_datetime(time, self.seconds_per_dt, self.ref_time)
 
+    # whats the purpose of unnormalising datetime ?
     def unnormalize_datetime(self, time):
         return unnormalize_datetime(time, self.seconds_per_dt, self.ref_time)
 
+    # This is the same as before. Reason for repetition in the code structure?
     @torch.no_grad()
     def load_coords(self, query_points_npy, batch_size=2048):
         target_shape = query_points_npy.shape[:-1]
@@ -143,6 +163,7 @@ class ModelLoader(SuNeRFLoader):
         flat_rays_d = rays_d.reshape([-1, 3]).to(self.device)
 
         # time = normalize_datetime(time, self.seconds_per_dt, self.ref_time)
+        # create time tensor
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
         rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
