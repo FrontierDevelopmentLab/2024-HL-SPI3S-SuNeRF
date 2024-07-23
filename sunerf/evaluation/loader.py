@@ -143,41 +143,79 @@ class ModelLoader(SuNeRFLoader):
 
     @torch.no_grad()
     def load_observer_image(self, lat: u, lon: u, time: float,
-                            distance = (1 * u.AU).to(u.solRad),
+                            distance=(1 * u.AU).to(u.solRad),
                             center: Tuple[float, float, float] = None, resolution=None,
                             batch_size: int = 4096):
-        # convert to pose
-        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
-        # load rays
+        """ Render observer image at a given time and location.
+
+        Parameters
+        ----------
+        lat : u
+            Latitude of the observer.
+        lon : u
+            Longitude of the observer.
+        time : float
+            Time of the observation.
+        distance : u
+            Distance of the observer from the Sun.
+        center : Tuple[float, float, float], optional
+            Center of the observer.
+        resolution : None, optional
+            Resolution of the image to render.
+        batch_size : int, optional
+            Batch size for rendering.
+        """
+
+        # Convert coordinates to pose
+        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad),
+                                     distance.to_value(u.solRad), center).numpy()
+
+        # Get coordinates of the image pixels
         if resolution is not None:
+            # Resample map to desired resolution
             ref_map = self.ref_map.resample(resolution)
+            # Get new coordinates of the image pixels
             img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
         else:
+            # Get coordinates of the image pixels
             img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
 
+        # Get rays from coordinates and pose
+        # rays_o: origin of the rays
+        # rays_d: direction of the rays
         rays_o, rays_d = get_rays(img_coords, target_pose)
+        # Convert rays to tensors
         rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
 
+        # Get image shape
         img_shape = rays_o.shape[:2]
+        # Flatten rays
         flat_rays_o = rays_o.reshape([-1, 3]).to(self.device)
         flat_rays_d = rays_d.reshape([-1, 3]).to(self.device)
 
         # time = normalize_datetime(time, self.seconds_per_dt, self.ref_time)
-        # create time tensor
+        # Create tensor of time values
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
         rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
             torch.split(flat_rays_d, batch_size), \
             torch.split(flat_time, batch_size)
 
+        # Initialize outputs
         outputs = {}
+        # Iterate over batches of rays and time
         for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
+            # Perform rendering of the rays at the given time
             b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
-            # TODO: Figure out the meaning of k, v
+            # Iterate over the outputs of the rendering and store them
             for k, v in b_outs.items():
+                # Initialize list if key is not in outputs
                 if k not in outputs:
                     outputs[k] = []
+                # Append the output to the list
                 outputs[k].append(v)
 
+        # Concatenate and reshape outputs
+        # k: key, v: value
         results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
-        return results        
+        return results

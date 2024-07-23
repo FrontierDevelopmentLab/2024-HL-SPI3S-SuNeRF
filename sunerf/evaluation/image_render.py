@@ -1,7 +1,6 @@
 import argparse
 import os
 from datetime import datetime
-
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 import matplotlib.pyplot as plt
@@ -9,90 +8,115 @@ import numpy as np
 import sunpy.visualization.colormaps as cm
 from sunpy.map import Map, make_fitswcs_header
 from tqdm import tqdm
-from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 # For density and temperature rendering
+from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
 
 class ImageRender:
-    r"""Class to store poses, render images, and save video
+    """ Class that renders images from a given model output
     """
     def __init__(self, render_path):
-        r"""
-        Arguments
+        """
+
+        Parameters
         ----------
-        main_args : string
-            path to hyperperams.yaml file with training configuration
-        video_args : string
-            path to hyperperams.yaml file with training configuration
+        render_path : str
+            Path to save rendered images
+
+        Returns
+        -------
+        None
         """
         # Path to save rendered images 
         self.render_path = render_path
 
     def save_frame_as_jpg(self, i, model_output, wavelength, itype='imager'):
-        r"""Method that saves an image from a viewpoint as the ith frame
-        Args
-        ------
+        r""" Method that saves an image from a viewpoint as the ith frame as jpg file
+
+        Parameters
+        ----------
         i : int
             frame number
-        point : np.array
-            lat,lon coordinate of viewpoint
+        model_output : numpy array
+            model output image
         wavelength : int
-            wavelength of image to render
+            wavelength of the image
+
+        Returns
+        -------
+        None
         """
 
         # Only save image if it doesn't exist
-        output_path =  f"{self.render_path}/{itype}/{wavelength}"
+        output_path = f"{self.render_path}/{itype}/{wavelength}"
         # Create output directory if it doesn't exist
         os.makedirs(output_path, exist_ok=True)
+        # Save image as jpg
         img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
+        # Save image if it doesn't exist
         if not os.path.exists(img_path):
             # Normalize the image
-            image = model_output/np.nanmean(model_output)
+            image = model_output/np.nanmean(model_output)  # TODO: Consider normalizing over full time sequence
             # Get the colormap
             cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
+            # Save the image
             plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
 
-
-    def save_frame_as_fits(self, i, point, model_output, wavelength, half_fov=1.3, itype='imager', obs_date='2014-04-01T00:00:00.000'):
+    def save_frame_as_fits(self, i, point, model_output, wavelength, half_fov=1.3,
+                           itype='imager', obs_date='2014-04-01T00:00:00.000'):
         r"""Method that saves an image from a viewpoint as the ith frame as fits file
-        Args
-        ------
+
+        Parameters
+        ----------
         i : int
             frame number
-        point : np.array
-            lat,lon coordinate of viewpoint
+        point : tuple
+            observer coordinates
+        model_output : numpy array
+            model output image
+        wavelength : int
+            wavelength of the image
         half_fov : float
-            half size field of view in solar radii 
+            half field of view of the image
+        itype : str
+            type of image
+        obs_date : str
+            observation date
+
+        Returns
+        -------
+        None
         """
 
         # Unpack or separate the point coordinates
         lat, lon, d, time = point
 
-        # save result image
-        output_path =  f"{self.render_path}/{itype}/{wavelength}"
         # Create output directory if it doesn't exist
+        output_path = f"{self.render_path}/{itype}/{wavelength}"
         # Why is this check happening twice (here and save_frame_as above)?
         os.makedirs(output_path, exist_ok=True)
+        # Save image as fits
         img_path = f'{output_path}/{str(i).zfill(3)}_w{wavelength}_lat{np.round(lat,1)}_lon{np.round(lon,1)}_r{np.round(d,2)}_T{(time.strftime("%Y%m%d-%H%M"))}.fits'
 
+        # Save image if it doesn't exist
         if not os.path.exists(img_path):
-
 
             # Create new header
             new_observer = SkyCoord(-lon*u.deg, lat*u.deg, d*u.AU, obstime=obs_date, frame='heliographic_stonyhurst')
             # Get the shape of the output image
             out_shape = model_output.shape
-            out_ref_coord = SkyCoord(0*u.arcsec, 0*u.arcsec, obstime=new_observer.obstime,
-                                    frame='helioprojective', observer=new_observer,
-                                    rsun=696000*u.km)
-
+            # Create reference coordinate
+            out_ref_coord = SkyCoord(0*u.arcsec, 0*u.arcsec, obstime=new_observer.obstime, frame='helioprojective',
+                                     observer=new_observer, rsun=696000*u.km)
+            # Calculate scaling factor
             scale = 360/np.pi*np.tan(((half_fov*u.solRad*d)/(1 * u.AU).to(u.solRad)).value)/out_shape[0] * u.deg
             # Convert scale to arcsec per pixel
             scale = scale.to(u.arcsec)/u.pix
 
+            # Create new header
             out_header = make_fitswcs_header(
                 out_shape,
                 out_ref_coord,
@@ -107,10 +131,32 @@ class ImageRender:
 
             # create dummy sunpy map
             s_map = Map(model_output, out_header)
+            # Save the image
             s_map.save(img_path, overwrite=True)
 
 
 def parse_args():
+    """ Function to parse command line arguments
+
+    Parameters
+    ----------
+    render_path : str
+        Path to save rendered images
+    resolution : int
+        Resolution of the images
+    batch_size : int
+        Batch size for rendering
+    output_format : str
+        Output format of the images
+    wavelengths : list
+        Wavelengths to render
+
+    Returns
+    -------
+    args : argparse.Namespace
+        Parsed command line arguments
+    """
+
     # Commands 
     p = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -129,17 +175,42 @@ def parse_args():
     args = p.parse_args()
     return args
 
-if __name__ == '__main__':
-    path_to_aia_file = "/mnt/disks/data/AIA/171/*.fits"
-    s_map = Map(path_to_aia_file)
 
+if __name__ == '__main__':
+    """ Main function to render images from a given model output
+    
+    Parameters
+    ----------
+    path_to_aia_file : str
+        Path to AIA files
+    render_path : str
+        Path to save rendered images
+    resolution : int
+        Resolution of the images
+    batch_size : int
+        Batch size for rendering
+    output_format : str
+        Output format of the images
+    wavelengths : list
+        Wavelengths to render
+        
+    Returns
+    -------
+    Imager renders.
+    """
+
+    # Parse command line arguments
     args = parse_args()
     render_path = args.render_path
     resolution = args.resolution
     resolution = (resolution, resolution) * u.pix
     batch_size = args.batch_size
     output_format = args.output_format
-    wavelengths = args.wavelengths # TODO: change to instrument specific and multi-wavelength 
+    wavelengths = args.wavelengths  # TODO: change to instrument specific and multi-wavelength
+
+    # Path to AIA files
+    path_to_aia_file = "/mnt/disks/data/AIA/171/*.fits"
+    s_map = Map(path_to_aia_file)
 
     # Initialization of the density and temperature model (Simple star analytical model or MHD model)
     # initialization of density and temperature with simple star
