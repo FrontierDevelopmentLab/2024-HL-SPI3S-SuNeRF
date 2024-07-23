@@ -107,6 +107,10 @@ class MHDModel(nn.Module):
             # check stats
             print(' ')
             print('Timesteps: ', f1, f2)
+            print('x: ', np.amin(x.cpu().numpy()), np.amax(x.cpu().numpy()))
+            print('y: ', np.amin(y.cpu().numpy()), np.amax(y.cpu().numpy()))
+            print('z: ', np.amin(z.cpu().numpy()), np.amax(z.cpu().numpy()))
+            print('Radii: ', np.amin(r.cpu().numpy()), np.amax(r.cpu().numpy()))
             ii = np.where(rho1 < 0)
             print('Number of negative pixels: ', len(ii[0]), rho1.shape)
             print(f'rho1 - min: {np.amin(rho1)} max: {np.amax(rho1)}')
