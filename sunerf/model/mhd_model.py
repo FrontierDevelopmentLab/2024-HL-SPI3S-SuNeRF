@@ -69,6 +69,7 @@ class MHDModel(nn.Module):
         # initilaize output tensors filled with zeros with shape x
         output_density = torch.zeros_like(x)
         output_temperature = torch.zeros_like(x)
+        fill_value = 1.e-10
 
         # loop over only unique times
         for time in torch.unique(t):
@@ -79,15 +80,20 @@ class MHDModel(nn.Module):
 
             # open files; read x_mhd, y_mhd, z_mhd, f; and interpolate for rho, t
             # applying RegularGridInterpolator as rgi
-            # TODO: Investigate interpolation of values at query points
             r_mhd, th_mhd, phi_mhd, rho1 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f1}.h5'))
+            # Filter out negative values
+            rho1[np.where(rho1 < 0)] = fill_value
             f1_rho_interp = rgi((phi_mhd, th_mhd, r_mhd), rho1, bounds_error=False, fill_value=1e-10)
 
+            
             r_mhd, th_mhd, phi_mhd, t1 = rdhdf_3d(os.path.join(self.data_path, 't', f't00{f1}.h5'))
             f1_t_interp = rgi((phi_mhd, th_mhd, r_mhd), t1, bounds_error=False, fill_value=1e-10)
 
+            # Filter out negative values
             r_mhd, th_mhd, phi_mhd, rho2 = rdhdf_3d(os.path.join(self.data_path, 'rho', f'rho00{f2}.h5'))
+            rho2[np.where(rho2 < 0)] = fill_value
             f2_rho_interp = rgi((phi_mhd, th_mhd, r_mhd), rho2, bounds_error=False, fill_value=1e-10)
+
 
             r_mhd, th_mhd, phi_mhd, t2 = rdhdf_3d(os.path.join(self.data_path, 't', f't00{f2}.h5'))
             f2_t_interp = rgi((phi_mhd, th_mhd, r_mhd), t2, bounds_error=False, fill_value=1e-10)
@@ -103,30 +109,6 @@ class MHDModel(nn.Module):
             f1_t = torch.Tensor(f1_t_interp((phi_mask, th_mask, r_mask))).to(t.device)
             f2_rho = torch.Tensor(f2_rho_interp((phi_mask, th_mask, r_mask))).to(t.device)
             f2_t = torch.Tensor(f2_t_interp((phi_mask, th_mask, r_mask))).to(t.device)
-
-            # check stats
-            print(' ')
-            print('Timesteps: ', f1, f2)
-            print('x: ', np.amin(x.cpu().numpy()), np.amax(x.cpu().numpy()))
-            print('y: ', np.amin(y.cpu().numpy()), np.amax(y.cpu().numpy()))
-            print('z: ', np.amin(z.cpu().numpy()), np.amax(z.cpu().numpy()))
-            print('Radii: ', np.amin(r.cpu().numpy()), np.amax(r.cpu().numpy()))
-            ii = np.where(rho1 < 0)
-            print('Number of negative pixels: ', len(ii[0]), rho1.shape)
-            print(f'rho1 - min: {np.amin(rho1)} max: {np.amax(rho1)}')
-            print(f'rho2 - min: {np.amin(rho2)} max: {np.amax(rho2)}')
-            print(f't1 - min: {np.amin(t1)} max: {np.amax(t1)}')
-            print(f't2- min: {np.amin(t2)} max: {np.amax(t2)}')
-
-            print(
-                f'rho1 (interp) - min: {np.amin(f1_rho_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f1_rho_interp((phi_mask, th_mask, r_mask)))}')
-            print(
-                f'rho2 (interp) - min: {np.amin(f2_rho_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f2_rho_interp((phi_mask, th_mask, r_mask)))}')
-            print(
-                f't1 (interp) - min: {np.amin(f1_t_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f1_t_interp((phi_mask, th_mask, r_mask)))}')
-            print(
-                f't2 (interp) min: {np.amin(f2_t_interp((phi_mask, th_mask, r_mask)))} max: {np.amax(f2_t_interp((phi_mask, th_mask, r_mask)))}')
-            print(' ')
             
             output_density[mask] = torch.log((1-frame_fraction)*f1_rho + frame_fraction*f2_rho)
             output_temperature[mask] = torch.log10(1e6*((1-frame_fraction)*f1_t + frame_fraction*f2_t))

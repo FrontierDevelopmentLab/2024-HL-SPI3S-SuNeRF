@@ -160,7 +160,7 @@ def parse_args():
     p = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--render_path', type=str)
-    p.add_argument('--resolution', type=int, default=256) 
+    p.add_argument('--resolution', type=int, default=512) 
     p.add_argument('--batch_size', type=int, default=4096)
     p.add_argument('--output_format', type=str, default='jpg')
     p.add_argument('--model', type=str, default='SimpleStar' )
@@ -230,7 +230,6 @@ if __name__ == '__main__':
     avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
 
     # Create render path directory if it doesnt exist. 
-    # Again ?
     os.makedirs(render_path, exist_ok=True)
 
     # Generate coordinates for the observer
