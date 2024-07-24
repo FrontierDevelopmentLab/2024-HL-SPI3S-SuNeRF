@@ -232,6 +232,10 @@ if __name__ == '__main__':
     # Create render path directory if it doesnt exist. 
     os.makedirs(render_path, exist_ok=True)
 
+    # TODO: Identify temporal cadennce of: 
+    #       (1) Simple star, 
+    #       (2) PSI simulation data (might be easier to match the times of the cubes)
+ 
     # Generate coordinates for the observer
     # Number of points to generate
     n_points = 2  # 60
@@ -244,15 +248,34 @@ if __name__ == '__main__':
     points_2 = zip(np.ones(n_points) * 0,
                 np.linspace(0, 360, n_points),
                 np.ones(n_points),
-                [avg_time] * n_points)
+                np.linspace(0, 1, n_points))
 
     points_3 = zip(np.linspace(-90, 90, n_points),
                 np.linspace(0, 360, n_points),
                 np.linspace(1, 0.2, n_points),
-                [avg_time] * n_points )
+                np.linspace(0, 1, n_points))
 
-    # combine coordinates  #TODO combine from different instruments
-    points = list(points_1) #+ list(points_2) + list(points_3)
+    # combine coordinates from different instruments
+    points = list(points_1) + list(points_2) + list(points_3)
+    
+    '''
+    def plot_sunpy_maps(s_map, points):
+    plt.figure()
+    '''
+    
+    
+    
+    
+    # Read AIA image 
+    
+    # Extract observation time and satellite position when AIA produced image
+    
+    # Convert into expected units/coordinate system for the render
+    
+    # Make the satellite move position virtually and make virtual satellites 
+    
+    # Repeat process, but this time use ACTUAL satellite positions as a function of time
+    
 
     # Iterate over the unpacked point coordinates
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
