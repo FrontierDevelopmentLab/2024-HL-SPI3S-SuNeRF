@@ -32,7 +32,7 @@ class ImageRender:
         # Path to save rendered images 
         self.render_path = render_path
 
-    def save_frame_as_jpg(self, i, model_output, wavelength, itype='imager'):
+    def save_frame_as_jpg(self, i, model_output, wavelength, itype='imager', vmin=None, vmax=None):
         r""" Method that saves an image from a viewpoint as the ith frame as jpg file
 
         Parameters
@@ -56,6 +56,11 @@ class ImageRender:
         # Save image as jpg
         img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
+        if vmin is None:
+            vmin = 0
+        if vmax is None:
+            vmax = np.nanmax(model_output)
+
         # Save image if it doesn't exist
         # if not os.path.exists(img_path):
         # Normalize the image
@@ -67,8 +72,9 @@ class ImageRender:
         fig_sizex = 4
         fig_sizey = 4
         fig = plt.figure(figsize=(fig_sizex, fig_sizey), constrained_layout = False)
-        ax = fig.add_subplot()
-        ax.imshow(image, cmap=cmap, norm='asinh', vmin=0, vmax=0.9*np.nanmax(image))
+        spec = fig.add_gridspec(nrows=1, ncols=1, left=0.00, right=1.00, bottom=0.00, top=1.00, wspace=0.00) 
+        ax = fig.add_subplot(spec[:, :])
+        ax.imshow(image, cmap=cmap, norm='log', vmin=vmin, vmax=vmax)
         ax.set_axis_off()
         plt.draw()
         plt.savefig(img_path, format='jpeg', dpi=300)
@@ -304,20 +310,26 @@ if __name__ == '__main__':
     # Repeat process, but this time use ACTUAL satellite positions as a function of time
     
 
+    images = []
     # Iterate over the unpacked point coordinates
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
-        
-        # Iterate over wavelengths
-        for n, wavelength in enumerate(wavelengths):
+        images.append(outputs['image'])
+    
+    # Iterate over wavelengths
+    for n, wavelength in enumerate(wavelengths):    
+        for i, image in enumerate(images):
             if output_format == 'jpg':
                 # Save as jpg
-                render.save_frame_as_jpg(i, outputs['image'][:,:,n], wavelength)
+                if i == 0:
+                    image_min = np.percentile(image, 1)  # np.nanmin(image[:,:,n])
+                    image_max =  np.percentile(image, 99)  # 0.9*np.nanmax(image[:,:,n])
+                render.save_frame_as_jpg(i, image[:,:,n], wavelength, vmin=image_min, vmax=image_max)
 
             elif output_format == 'fits':
                 # i, point, model_output, wavelength,
                 # Save as FITS
-                render.save_frame_as_fits(i, (lat, lon, d, time), outputs['image'][:,:,n], wavelength, obs_date=avg_time)
+                render.save_frame_as_fits(i, (lat, lon, d, time), image[:,:,n], wavelength, obs_date=avg_time)
             else:
                 # Print error if format is invalid
                 print('No valid format selected')
