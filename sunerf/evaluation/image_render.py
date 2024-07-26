@@ -6,13 +6,17 @@ from astropy.coordinates import SkyCoord
 import matplotlib.pyplot as plt
 import numpy as np
 import sunpy.visualization.colormaps as cm
-from sunpy.map import Map, make_fitswcs_header, all_coordinates_from_map
+from sunpy.map import Map, make_fitswcs_header, all_coordinates_from_map, header_helper
+from sunpy.map.header_helper import get_observer_meta
 from tqdm import tqdm
 # For density and temperature rendering
 from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
+from sunpy.coordinates import get_body_heliographic_stonyhurst
+import sunpy.sun.constants as constants
+
 
 class ImageRender:
     """ Class that renders images from a given model output
@@ -199,6 +203,33 @@ def parse_args():
 #     time_array = np.linspace(0, 1, n_points)
 #     points = zip(time_array)
 #     return points
+def load_observer_meta(path_to_file):
+    '''Main function to load observer data
+    
+    Parameters
+    ----------
+    path_to_aia_file : str
+        Path to AIA files
+
+    Returns:
+
+    '''    
+    # Read AIA image 
+    s_map = Map(path_to_file)
+    
+    # Extract observation time and satellite position when AIA produced image
+    sat_coords = s_map.observer_coordinate 
+    coord_meta = get_observer_meta(sat_coords)
+    lat = coord_meta['hglt_obs'] #latitude [degree]
+    lon = coord_meta['hgln_obs'] #longiture [degree]
+    dist = coord_meta['dsun_obs'] # instrument distance in units [m]
+    
+    # Convert into expected units/coordinate system for the render
+    dist = dist*u.m.to(u.au) # convertion to [AU] with astropy
+    
+    # Extract observation time 
+    time = s_map.date
+    return lat, lon, dist, time
 
 if __name__ == '__main__':
     """ Main function to render images from a given model output
@@ -290,22 +321,56 @@ if __name__ == '__main__':
     def plot_sunpy_maps(s_map, points):
     plt.figure()
     '''
-    lat = np.linspace(0, 90, n_points) # different latitudes for novel views
-    lon = np.linspace(0, 360, n_points)
-    dist = np.linspace(1, 2, n_points) 
-    time = np.zeros(n_points)  # Keep all observers at time 0
-    points = list(zip(lat, lon, dist, time))
-    print(f'points: {points}')
-
-    
-    
+    # lat = np.linspace(0, 90, n_points) # different latitudes for novel views
+    # lon = np.linspace(0, 360, n_points)
+    # dist = np.linspace(1, 2, n_points) 
+    # time = np.zeros(n_points)  # Keep all observers at time 0
+    # points = list(zip(lat, lon, dist, time))
+    # print(f'points: {points}')
+      
     # Read AIA image 
     
-    # Extract observation time and satellite position when AIA produced image
+    # # Extract observation time and satellite position when AIA produced image
+    # sat_coords = s_map.observer_coordinate 
+    # coord_meta = get_observer_meta(sat_coords)
+    # aia_lat = coord_meta['hglt_obs']
+    # aia_lon = coord_meta['hgln_obs']
+    # aia_dist = coord_meta['dsun_obs'] # instrument distance in units [m]
     
-    # Convert into expected units/coordinate system for the render
+    #  # Convert into expected units/coordinate system for the render
+    # aia_dist = aia_dist*u.m.to(u.au) # convertion to [AU] with astropy
+
+    aia_lat, aia_lon, aia_dist, sat_time = load_observer_meta(path_to_aia_file)
     
+    n_points = 4
+    lat = np.linspace(aia_lat, aia_lat, n_points) # different latitudes for novel views
+    lon = np.linspace(aia_lon, aia_lon+360, n_points)
+    dist = np.linspace(aia_dist, aia_dist, n_points) 
+    time = np.zeros(n_points)  # Keep all observers at time 0
+    
+    points = list(zip(lat, lon, dist, time))
+    
+    print(f'points: {points}')
+    # print(f"Lat: {aia_lat}")     # Latitude of obs [deg]
+    # print(f"Lon: {aia_lon}")     # Longitude of obs [deg]
+    # print(f"Distance: {aia_dist}") # Distance of obs in units [m]; Needs to be converted to AU
+    # print(f"sat_time {sat_time}")
+    
+    # map.observer_coordinate - The Heliographic Stonyhurst Coordinate of the observer.
+    # sunpy.map.header_helper.get_observer_meta(observer, rsun: (Unit('Mm'), None) = None):
+    # Returns: coord_meta (dict) – WCS metadata, with the keys ['hgln_obs', 'hglt_obs', 'dsun_obs'], and additionally if rsun is given ['rsun_obs', 'rsun_ref'].
+
+    # gsunpy.map.header_helper.get_observer_meta(observer, rsun: (Unit('Mm'), None) = None)
+
+
+    # # Extract observation time 
+    # sat_time = s_map.date
+    # print(f"sat_time {sat_time}")
+    
+
     # Make the satellite move position virtually and make virtual satellites 
+
+
     
     # Repeat process, but this time use ACTUAL satellite positions as a function of time
     
@@ -315,6 +380,8 @@ if __name__ == '__main__':
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
         images.append(outputs['image'])
+        for n, wavelength in enumerate(wavelengths):    
+            render.save_frame_as_jpg(i, outputs['image'][:,:,n], wavelength)
     
     # Iterate over wavelengths
     for n, wavelength in enumerate(wavelengths):    
