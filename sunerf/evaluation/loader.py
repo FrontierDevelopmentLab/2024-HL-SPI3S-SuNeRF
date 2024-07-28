@@ -7,7 +7,7 @@ from astropy import units as u
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
-
+import concurrent.futures
 # For date normalization utilities
 from sunerf.data.date_util import normalize_datetime, unnormalize_datetime
 from sunerf.data.ray_sampling import get_rays
@@ -17,6 +17,7 @@ class SuNeRFLoader:
 
     def __init__(self, state_path, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
+        print(f"Loading model to device {device}")
         self.device = device
 
         state = torch.load(state_path)
@@ -142,6 +143,10 @@ class ModelLoader(SuNeRFLoader):
         self.seconds_per_dt = 1
         self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
 
+    def process_batch(self, b_rays_o, b_rays_d, b_time):
+        b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+        return b_outs
+
     @torch.no_grad()
     def load_observer_image(self, lat: u, lon: u, time: float,
                             distance=(1 * u.AU).to(u.solRad),
@@ -204,17 +209,14 @@ class ModelLoader(SuNeRFLoader):
 
         # Initialize outputs
         outputs = {}
-        # Iterate over batches of rays and time
-        for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
-            # Perform rendering of the rays at the given time
-            b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
-            # Iterate over the outputs of the rendering and store them
-            for k, v in b_outs.items():
-                # Initialize list if key is not in outputs
-                if k not in outputs:
-                    outputs[k] = []
-                # Append the output to the list
-                outputs[k].append(v)
+        # Iterate over batches of rays and time. Use ThreadPoolExecutor for parallel processing
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time) for b_rays_o, b_rays_d, b_time in
+                       zip(rays_o, rays_d, time)]
+            for future in concurrent.futures.as_completed(futures):
+                b_outs = future.result()
+                for k, v in b_outs.items():
+                    outputs.setdefault(k, []).append(v)
 
         # Concatenate and reshape outputs
         # k: key, v: value
