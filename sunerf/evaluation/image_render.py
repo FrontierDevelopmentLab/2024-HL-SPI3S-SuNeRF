@@ -16,6 +16,7 @@ from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
 from sunpy.coordinates import get_body_heliographic_stonyhurst
 import sunpy.sun.constants as constants
+import glob
 
 
 class ImageRender:
@@ -339,6 +340,25 @@ if __name__ == '__main__':
     
     #  # Convert into expected units/coordinate system for the render
     # aia_dist = aia_dist*u.m.to(u.au) # convertion to [AU] with astropy
+
+
+
+    # 
+    # List of all fits files for SDO
+    sdo_files = sorted(glob.glob("/mnt/disks/data/raw/sdo_2012_08/1h_171/*.fits"))
+    # Extract metadata from each fits file
+    # SDO positions as a function of time
+    sdo_observer_position = [load_observer_meta(sdo_file) for sdo_file in sdo_files]
+    lat = 
+    
+    # Do we need to use .append on observer_position to create more observers??
+    
+
+
+    
+    
+
+
 
     aia_lat, aia_lon, aia_dist, sat_time = load_observer_meta(path_to_aia_file)
     
