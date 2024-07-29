@@ -291,7 +291,7 @@ if __name__ == '__main__':
     # Create render path directory if it doesnt exist. 
     os.makedirs(render_path, exist_ok=True)
 
-    # TODO: Identify temporal cadennce of: 
+    # TODO: Identify temporal cadence of:
     #       (1) Simple star, 
     #       (2) PSI simulation data (might be easier to match the times of the cubes)
  

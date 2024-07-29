@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-
+import datetime
 from sunerf.model.model import NeRF
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler

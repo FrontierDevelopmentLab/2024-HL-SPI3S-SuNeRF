@@ -3,7 +3,6 @@ from torch import nn
 from astropy import units as u
 from sunpy.io.special import read_genx
 from xitorch.interpolate import Interp1D
-
 from sunerf.rendering.base_tracing import SuNeRFRendering, cumprod_exclusive
 
 def rectangular_integral(x, y, cumsum=False):
