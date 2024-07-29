@@ -229,7 +229,7 @@ def load_observer_meta(path_to_file):
     dist = dist*u.m.to(u.au) # convertion to [AU] with astropy
     
     # Extract observation time 
-    time = s_map.date
+    time = s_map.meta['t_obs']
     return lat, lon, dist, time
 
 if __name__ == '__main__':
@@ -346,11 +346,23 @@ if __name__ == '__main__':
     # 
     # List of all fits files for SDO
     sdo_files = sorted(glob.glob("/mnt/disks/data/raw/sdo_2012_08/1h_171/*.fits"))
+    sdo_meta = [load_observer_meta(filepath) for filepath in tqdm(sdo_files[0:5])]
+    print(sdo_meta)
+    
+    for i, (lat, lon, d, time) in tqdm(enumerate(sdo_meta), total=len(sdo_meta)):
+        # first_timestep = sdo_meta[0][3]
+        # print(first_timestep)
+        outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
+    
+    exit()
+    stereo_a_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_A.fits"))
+    stereo_b_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_B.fits"))
     # Extract metadata from each fits file
     # SDO positions as a function of time
-    sdo_observer_position = [load_observer_meta(sdo_file) for sdo_file in sdo_files]
-    lat = 
+    stereo_a_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_a_files)]
+    stereo_b_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_b_files)]
     
+   
     # Do we need to use .append on observer_position to create more observers??
     
 
@@ -400,8 +412,6 @@ if __name__ == '__main__':
     for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
         outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
         images.append(outputs['image'])
-        for n, wavelength in enumerate(wavelengths):    
-            render.save_frame_as_jpg(i, outputs['image'][:,:,n], wavelength)
     
     # Iterate over wavelengths
     for n, wavelength in enumerate(wavelengths):    

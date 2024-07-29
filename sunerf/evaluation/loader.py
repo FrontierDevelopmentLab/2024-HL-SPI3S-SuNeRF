@@ -199,7 +199,8 @@ class ModelLoader(SuNeRFLoader):
         flat_rays_o = rays_o.reshape([-1, 3]).to(self.device)
         flat_rays_d = rays_d.reshape([-1, 3]).to(self.device)
 
-        # time = normalize_datetime(time, self.seconds_per_dt, self.ref_time)
+        #self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+        # time = normalize_datetime(datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f'), self.seconds_per_dt, self.ref_time)
         # Create tensor of time values
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
@@ -210,7 +211,7 @@ class ModelLoader(SuNeRFLoader):
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time. Use ThreadPoolExecutor for parallel processing
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             futures = [executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time) for b_rays_o, b_rays_d, b_time in
                        zip(rays_o, rays_d, time)]
             for future in concurrent.futures.as_completed(futures):
