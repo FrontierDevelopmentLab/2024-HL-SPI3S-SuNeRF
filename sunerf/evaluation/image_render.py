@@ -124,7 +124,8 @@ class ImageRender:
         if not os.path.exists(img_path):
 
             # Create new header
-            new_observer = SkyCoord(-lon*u.deg, lat*u.deg, d*u.AU, obstime=obs_date, frame='heliographic_stonyhurst')
+            new_observer = SkyCoord(-lon*u.deg, lat*u.deg, d*u.AU, obstime=obs_date,
+                                    frame='heliographic_stonyhurst')
             # Get the shape of the output image
             out_shape = model_output.shape
             # Create reference coordinate
@@ -183,7 +184,7 @@ def parse_args():
     p.add_argument('--resolution', type=int, default=1024) 
     p.add_argument('--batch_size', type=int, default=4096)
     p.add_argument('--output_format', type=str, default='jpg')
-    p.add_argument('--model', type=str, default='SimpleStar' )
+    p.add_argument('--model', type=str, default='SimpleStar')
     p.add_argument(
         "--wavelengths",
         type=int,
@@ -192,36 +193,44 @@ def parse_args():
         help="Wavelengths to render",
     )    
 
-    args = p.parse_args()
-    return args
+    return p.parse_args()
 
 
 def load_observer_meta(path_to_file):
-    '''Main function to load observer data
+    """ Main function to load observer data
     
     Parameters
     ----------
-    path_to_aia_file : str
+    path_to_file : str
         Path to AIA files
 
-    Returns:
-
-    '''    
+    Returns
+    --------
+    lat : float
+        Latitude of the observer
+    lon : float
+        Longitude of the observer
+    dist : float
+        Distance of the observer from the Sun
+    time : str
+        Time of the observation
+    """
     # Read AIA image 
     s_map = Map(path_to_file)
     
     # Extract observation time and satellite position when AIA produced image
     sat_coords = s_map.observer_coordinate 
     coord_meta = get_observer_meta(sat_coords)
-    lat = coord_meta['hglt_obs'] #latitude [degree]
-    lon = coord_meta['hgln_obs'] #longiture [degree]
-    dist = coord_meta['dsun_obs'] # instrument distance in units [m]
+    lat = coord_meta['hglt_obs']  # latitude [degree]
+    lon = coord_meta['hgln_obs']  # longitude [degree]
+    dist = coord_meta['dsun_obs']  # instrument distance in units [m]
     
     # Convert into expected units/coordinate system for the render
-    dist = dist*u.m.to(u.au) # convertion to [AU] with astropy
+    dist = dist*u.m.to(u.au)  # conversion to [AU] with astropy
     
-    # Extract observation time 
-    time = str(s_map.date)  # s_map.meta['t_obs']  # TODO: Keyword does not exist for ITI
+    # Extract observation time
+    time = s_map.meta['t_obs'] if ('t_obs' in s_map.meta) else s_map.meta['date-obs']
+
     return lat, lon, dist, time
 
 
@@ -268,26 +277,24 @@ if __name__ == '__main__':
     stereo_b_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_B.fits"))[0:10]
     stereo_b_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_b_files)]
     s_map = Map(stereo_a_files[0])
-    # print(s_map.meta)
-    print(s_map.date, s_map.meta['date-obs'])
-    exit()
     # Combine all observer meta data
-    observer_meta = sdo_meta  + stereo_a_meta + stereo_b_meta
+    observer_meta = sdo_meta + stereo_a_meta + stereo_b_meta
 
     # Reference map for module
     s_map = Map(sdo_files[0])
-    # s_map_t = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-    s_map_t = datetime.strptime(str(s_map.date), '%Y-%m-%dT%H:%M:%S.%f')
+    s_map_t = datetime.strptime(s_map.meta['t_obs'] if ('t_obs' in s_map.meta) else s_map.meta['date-obs'],
+                                '%Y-%m-%dT%H:%M:%S.%f')
 
     # Initialization of the density and temperature model (Simple star analytical model or MHD model)
-    if model=='SimpleStar':
-        rendering = DensityTemperatureRadiativeTransfer(wavelengths=wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None)
+    if model == 'SimpleStar':
+        rendering = DensityTemperatureRadiativeTransfer(wavelengths=wavelengths, Rs_per_ds=1, model=SimpleStar,
+                                                        model_config=None)
         # Dummy timesteps
         t_i = 0
         t_f = 1
         t_shift = 0
         dt = 1.0
-    elif model=='MHDModel':
+    elif model == 'MHDModel':
         # Path to MHD data
         data_path = '/mnt/disks/data/MHD'
         # List of all density files
@@ -299,7 +306,10 @@ if __name__ == '__main__':
         # Timestep = 1 hour
         dt = 3600.0
         # Define MHD model and rendering
-        rendering = DensityTemperatureRadiativeTransfer(wavelengths=wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': data_path})
+        rendering = DensityTemperatureRadiativeTransfer(wavelengths=wavelengths, Rs_per_ds=1, model=MHDModel,
+                                                        model_config={'data_path': data_path})
+    else:
+        raise ValueError('Model not implemented')
     
     # Compute pixel intensity for a given model
     loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
@@ -325,13 +335,13 @@ if __name__ == '__main__':
             if output_format == 'jpg':
                 # Save as jpg
                 if i == 0:
-                    image_min = np.percentile(image, 1) 
-                    image_max =  np.percentile(image, 99) 
-                render.save_frame_as_jpg(i, image[:,:,n], wavelength, vmin=image_min, vmax=image_max)
+                    image_min = np.percentile(image[:, :, n], 1)
+                    image_max = np.percentile(image[:, :, n], 99)
+                render.save_frame_as_jpg(i, image[:, :, n], wavelength, vmin=image_min, vmax=image_max)
 
             if output_format == 'fits':
                 # i, point, model_output, wavelength,
                 # Save as FITS
                 # TODO: Pass file header information
-                render.save_frame_as_fits(i, (lat, lon, d, time), image[:,:,n], wavelength)
+                render.save_frame_as_fits(i, (lat, lon, d, time), image[:, :, n], wavelength)
 
