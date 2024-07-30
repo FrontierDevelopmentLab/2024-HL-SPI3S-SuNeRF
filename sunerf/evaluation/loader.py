@@ -61,12 +61,14 @@ class SuNeRFLoader:
 
     # Disable gradient calculation
     @torch.no_grad()
-    def load_observer_image(self, lat: u, lon: u, time: datetime,
+    def render_observer_image(self, lat: u, lon: u, time: datetime,
                             distance = (1 * u.AU).to(u.solRad),
                             center: Tuple[float, float, float] = None, resolution=None,
-                            batch_size: int = 4096):
+                            batch_size: int = 128):
+                            #Original batch_size : 4096
+                            
         # convert to pose
-        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
+        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_vaslue(u.rad), distance.to_value(u.solRad), center).numpy()
         # load rays
         if resolution is not None:
             # Resample map to desired resolution
@@ -141,14 +143,21 @@ class ModelLoader(SuNeRFLoader):
         self.rendering = nn.DataParallel(rendering).to(device)
         self.model = nn.DataParallel(model).to(device)   
         self.seconds_per_dt = 1
-        self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+        self.ref_time = datetime.strptime(ref_map.meta['t_obs'] 
+                                          if ('t_obs' in ref_map.meta) else ref_map.meta['date-obs'], 
+                                          '%Y-%m-%dT%H:%M:%S.%f')
 
     def process_batch(self, b_rays_o, b_rays_d, b_time):
         b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
         return b_outs
 
+    def process_batch_with_index(self, index, b_rays_o, b_rays_d, b_time):
+            result = self.process_batch(b_rays_o, b_rays_d, b_time)
+            return index, result
+
+
     @torch.no_grad()
-    def load_observer_image(self, lat: u, lon: u, time: float,
+    def render_observer_image(self, lat: u, lon: u, time: float,
                             distance=(1 * u.AU).to(u.solRad),
                             center: Tuple[float, float, float] = None, resolution=None,
                             batch_size: int = 4096):
@@ -211,15 +220,72 @@ class ModelLoader(SuNeRFLoader):
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time. Use ThreadPoolExecutor for parallel processing
+        
+        
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time) for b_rays_o, b_rays_d, b_time in
-                       zip(rays_o, rays_d, time)]
-            for future in concurrent.futures.as_completed(futures):
-                b_outs = future.result()
-                for k, v in b_outs.items():
-                    outputs.setdefault(k, []).append(v)
+           futures = [executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time) for b_rays_o, b_rays_d, b_time in
+                      zip(rays_o, rays_d, time)]
+           for future in concurrent.futures.as_completed(futures):
+               b_outs = future.result()
+               for k, v in b_outs.items():
+                   outputs.setdefault(k, []).append(v)
+                   
+        results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
+        return results
+
+
+        # with concurrent.futures.ThreadPoolExecutor() as executor:
+        #     futures = [executor.submit(self.process_batch_with_index, idx, b_rays_o, b_rays_d, b_time) for idx, (b_rays_o, b_rays_d, b_time) in 
+        #                enumerate(zip(rays_o, rays_d, time))]
+            
+        #     for future in concurrent.futures.as_completed(futures):
+        #         index, b_outs = future.result()
+        #         # b_outs = future.result()
+        #         for k, v in b_outs.items():
+        #             outputs.setdefault(index, {}).setdefault(k, []).append(v)
+        #             # outputs.setdefault(k, []).append(v)
+                    
+        # print(type(outputs))
+        # # Reorder outputs if needed
+        
+        # ordered_outputs = {idx: outputs[idx] for idx in sorted(tuple(outputs))}
+        # print(type(ordered_outputs))
+        # tensor_tuple = tuple(ordered_outputs.values())
+        # print(type(tensor_tuple))
+
+
+
+        # results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in ordered_outputs.items()}
+        # return results
+        
+        
 
         # Concatenate and reshape outputs
         # k: key, v: value
-        results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
-        return results
+        #results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
+       
+        # results = {k: torch.cat(tuple(v)).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
+        # return results
+       
+       
+       
+        # results = {}
+        # for k, tensor_dict in ordered_outputs.items():
+        #     if isinstance(tensor_dict, dict):
+        #     #Extract tensors from dictionary values
+        #        tensors = list(tensor_dict.values())
+        #     else:
+        #     #Directly use tensors if v is not a dictionary
+        #        tensors = tensor_dict
+        #     if not isinstance(tensors, (list, tuple)):
+        #         raise TypeError(f"Expected list or tuple of tensors for key {k}, got {type(tensors)}")
+        #     if not all(isinstance(tensor, torch.Tensor) for tensor in tensors):
+        #         raise TypeError(f"All elements for key {k} must be tensors")
+        #     # Concatenate tensors
+        #     concatenated_tensor = torch.cat(tensors)
+    
+        #     # Reshape and convert to NumPy
+        #     reshaped_tensor = concatenated_tensor.view(*img_shape, *tensors[0].shape[1:])
+        #     results[k] = reshaped_tensor.cpu().numpy()
+        
+        # return results

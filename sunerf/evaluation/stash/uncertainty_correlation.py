@@ -53,7 +53,7 @@ errors = []
 for i, f in enumerate(tqdm(files)):
     s_map = Map(f)
 
-    predictions = [loader.load_observer_image(s_map.carrington_latitude.value, -s_map.carrington_longitude.value,
+    predictions = [loader.render_observer_image(s_map.carrington_latitude.value, -s_map.carrington_longitude.value,
                                               s_map.date.to_datetime(),
                                               distance=s_map.dsun.to(u.solRad).value, batch_size=batch_size * n_gpus,
                                               strides=strides)['channel_map']

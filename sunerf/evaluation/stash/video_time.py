@@ -29,6 +29,6 @@ points_1 = zip(np.ones(20) * subframe['hgc_lat'],
 points = list(points_1)
 
 for i, (lat, lon, time, d) in tqdm(list(enumerate(points)), total=len(points)):
-    outputs = loader.load_observer_image(lat, lon, time, distance=d, batch_size=4096 * 2, strides=8)
+    outputs = loader.render_observer_image(lat, lon, time, distance=d, batch_size=4096 * 2, strides=8)
     img = outputs['channel_map']
     plt.imsave(os.path.join(video_path, '%03d.jpg' % i), img, cmap=cmap, vmin=0, vmax=1)

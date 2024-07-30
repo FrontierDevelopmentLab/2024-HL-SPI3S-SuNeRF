@@ -88,7 +88,7 @@ for i, (lat, lon, time, d) in tqdm(list(enumerate(points)), total=len(points)):
     aia_map = aia_maps[np.argmin(np.abs(aia_dates - time))]
     aia_img = sdo_norms[int(aia_map.wavelength.value)](aia_map.data)
 
-    outputs = loader.load_observer_image(lat, lon, time, distance=d, center=center, batch_size=4096, strides=1)
+    outputs = loader.render_observer_image(lat, lon, time, distance=d, center=center, batch_size=4096, strides=1)
     fig, axs = plt.subplots(1, 4, figsize=(20, 5))
     axs[0].imshow(outputs['channel_map'], cmap=cmap, vmin=0, vmax=1, origin='lower')
     axs[1].imshow(outputs['height_map'], cmap='plasma', vmin=1, vmax=1.6, origin='lower')

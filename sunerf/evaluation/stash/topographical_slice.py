@@ -77,7 +77,7 @@ W = stereo_a_map.data.shape[0]  # number of pixels
 focal = (.5 * W) / np.arctan(0.5 * (scale * W * u.pix).to(u.deg).value * np.pi / 180)
 
 loader = SuNeRFLoader(chk_path, resolution=W, focal=focal)
-outputs = loader.load_observer_image(0, -target_lon + 90, stereo_a_map.date.to_datetime(),
+outputs = loader.render_observer_image(0, -target_lon + 90, stereo_a_map.date.to_datetime(),
                                      stereo_a_map.dsun.to(u.solRad).value)
 
 start = SkyCoord((target_lon + 90) * u.deg, 90 * u.deg, frame=HeliographicCarrington,
