@@ -287,23 +287,10 @@ if __name__ == '__main__':
     stereo_b_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_B.fits"))[0:1]
     stereo_b_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_b_files)]
     s_map = Map(stereo_a_files[0])
-    
-    total_files= sdo_files + stereo_a_files + stereo_b_files
 
-    #hdul = fits.open(sdo_files[0])
-    # h_naxis1 = hdul.header['NAXIS1']
-    # print(h_naxis1)
-    
-    # for hdu in hdul: 
-    #     print(hdu.header['NAXIS1'])
-    
-
-                
-                
-
-     # Combine all observer meta data into one single list
+    # Combine all observer meta data into one single list
     observer_meta = sdo_meta + stereo_a_meta + stereo_b_meta
-    
+    observer_files = sdo_files + stereo_a_files + stereo_b_files
 
     # Reference map for module from the first SDO-AIA file
     s_map = Map(sdo_files[0])
@@ -353,8 +340,7 @@ if __name__ == '__main__':
         outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, distance=d*u.AU, batch_size=batch_size, resolution=resolution)
         images.append(outputs['image'])
         # render.save_frame_as_fits(i, (lat, lon, d, time), image[:, :, n], wavelength)
-    
-        fractional_time = t # input timestep
+
     # TODO: 
     # Create render path directory if it doesnt exist. 
     os.makedirs(render_path, exist_ok=True)
@@ -370,7 +356,7 @@ if __name__ == '__main__':
 
             if output_format == 'fits':
                 #Get individual files headers and modify for training dataset
-                hdul = fits.open(total_files[i])
+                hdul = fits.open(observer_files[i])
                 for hdu in hdul:
                 #Looping through all observers
                 #Print the original header

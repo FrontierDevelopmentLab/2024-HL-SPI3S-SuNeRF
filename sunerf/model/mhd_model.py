@@ -64,7 +64,7 @@ class MHDModel(nn.Module):
         data[np.where(data < 0)] = fill_value
 
         # Interpolation based on device
-        if self.device.type == 'cuda1':
+        if self.device.type == 'cuda':
             f1_interp = rgi_gpu((cp.array(phi_mhd), cp.array(th_mhd), cp.array(r_mhd)), cp.array(data),
                                 method=method, bounds_error=False, fill_value=fill_value)
             return cp.asnumpy(f1_interp((cp.array(phi), cp.array(theta), cp.array(r))))
