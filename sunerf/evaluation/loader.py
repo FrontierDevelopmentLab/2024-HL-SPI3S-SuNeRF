@@ -211,7 +211,7 @@ class ModelLoader(SuNeRFLoader):
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time. Use ThreadPoolExecutor for parallel processing
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time) for b_rays_o, b_rays_d, b_time in
                        zip(rays_o, rays_d, time)]
             for future in concurrent.futures.as_completed(futures):

@@ -195,15 +195,7 @@ def parse_args():
     args = p.parse_args()
     return args
 
-# def get_positions(cordinates, n_points):
 
-#     # points_1 = zip(np.linspace(-25, 25, n_points),
-#     #         np.linspace(0, 45, n_points),
-#     #         np.linspace(1.5, 0.8, n_points),
-#     #         np.linspace(0, 1, n_points))
-#     time_array = np.linspace(0, 1, n_points)
-#     points = zip(time_array)
-#     return points
 def load_observer_meta(path_to_file):
     '''Main function to load observer data
     
@@ -229,8 +221,9 @@ def load_observer_meta(path_to_file):
     dist = dist*u.m.to(u.au) # convertion to [AU] with astropy
     
     # Extract observation time 
-    time = s_map.meta['t_obs']
+    time = str(s_map.date)  # s_map.meta['t_obs']  # TODO: Keyword does not exist for ITI
     return lat, lon, dist, time
+
 
 if __name__ == '__main__':
     """ Main function to render images from a given model output
@@ -262,171 +255,83 @@ if __name__ == '__main__':
     resolution = (resolution, resolution) * u.pix
     batch_size = args.batch_size
     output_format = args.output_format
-    wavelengths = args.wavelengths  # TODO: change to instrument specific and multi-wavelength
+    wavelengths = args.wavelengths  
     model = args.model
 
-    # Path to AIA files
-    # Retrieving wavelength 171 Angstrom
-    path_to_aia_file = "/mnt/disks/data/AIA/171/*.fits"
-    s_map = Map(path_to_aia_file)
-    # solar_radius = s_map.meta['distance']
-    # solar_radius = all_coordinates_from_map(smap)
-    
+    # TODO: Make this scenario-dependent
+    # TODO: Extract full header and update it?
+    # List of all fits files for SDO, STEREO-A, STEREO-B    
+    sdo_files = sorted(glob.glob("/mnt/disks/data/raw/sdo_2012_08/1h_171/*.fits"))[0:10]
+    sdo_meta = [load_observer_meta(filepath) for filepath in tqdm(sdo_files)]
+    stereo_a_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_A.fits"))[0:10]
+    stereo_a_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_a_files)]
+    stereo_b_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_B.fits"))[0:10]
+    stereo_b_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_b_files)]
+    s_map = Map(stereo_a_files[0])
+    # print(s_map.meta)
+    print(s_map.date, s_map.meta['date-obs'])
+    exit()
+    # Combine all observer meta data
+    observer_meta = sdo_meta  + stereo_a_meta + stereo_b_meta
+
+    # Reference map for module
+    s_map = Map(sdo_files[0])
+    # s_map_t = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+    s_map_t = datetime.strptime(str(s_map.date), '%Y-%m-%dT%H:%M:%S.%f')
 
     # Initialization of the density and temperature model (Simple star analytical model or MHD model)
-    # initialization of density and temperature with simple star 
     if model=='SimpleStar':
-        rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None)  # TODO: explic. define star properties
+        rendering = DensityTemperatureRadiativeTransfer(wavelengths=wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None)
+        # Dummy timesteps
+        t_i = 0
+        t_f = 1
+        t_shift = 0
+        dt = 1.0
     elif model=='MHDModel':
-        rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
-    
-    # ALTERNATIVE : MHD model (alternately commenting out)
+        # Path to MHD data
+        data_path = '/mnt/disks/data/MHD'
+        # List of all density files
+        density_files = sorted(glob.glob(os.path.join(data_path, 'rho', '*.h5')))
+        # Identify timesteps for first and last file
+        t_i = int(density_files[0].split('00')[1].split('.h5')[0])
+        t_f = int(density_files[-1].split('00')[1].split('.h5')[0])
+        t_shift = 0
+        # Timestep = 1 hour
+        dt = 3600.0
+        # Define MHD model and rendering
+        rendering = DensityTemperatureRadiativeTransfer(wavelengths=wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': data_path})
     
     # Compute pixel intensity for a given model
     loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
-    # Render = Save pixel intensity as an image (jpeg)
-    # Save pixel intensity and observer coordinates as a fits file
     render = ImageRender(render_path)
-    avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
 
-    # Create render path directory if it doesnt exist. 
-    os.makedirs(render_path, exist_ok=True)
-
-    # TODO: Identify temporal cadence of:
-    #       (1) Simple star, 
-    #       (2) PSI simulation data (might be easier to match the times of the cubes)
- 
-    # Generate coordinates for the observer in units [solar rad.]
-    # Number of points to generate
-    n_points = 8  # 60
-    
-    # points_1 = zip(np.linspace(-25, 25, n_points),
-    #             np.linspace(0, 45, n_points),
-    #             np.linspace(1.5, 0.8, n_points),
-    #             np.linspace(0, 1, n_points))
-
-    # points_2 = zip(np.ones(n_points) * 0,
-    #             np.linspace(0, 360, n_points),
-    #             np.ones(n_points),
-    #             np.linspace(0, 1, n_points))
-
-    # points_3 = zip(np.linspace(-90, 90, n_points),
-    #             np.linspace(0, 360, n_points),
-    #             np.linspace(1, 0.2, n_points),
-    #             np.linspace(0, 1, n_points))
-
-    # # combine coordinates from different instruments
-    # points = list(points_1) + list(points_2) + list(points_3)
-    
-    '''
-    def plot_sunpy_maps(s_map, points):
-    plt.figure()
-    '''
-    # lat = np.linspace(0, 90, n_points) # different latitudes for novel views
-    # lon = np.linspace(0, 360, n_points)
-    # dist = np.linspace(1, 2, n_points) 
-    # time = np.zeros(n_points)  # Keep all observers at time 0
-    # points = list(zip(lat, lon, dist, time))
-    # print(f'points: {points}')
-      
-    # Read AIA image 
-    
-    # # Extract observation time and satellite position when AIA produced image
-    # sat_coords = s_map.observer_coordinate 
-    # coord_meta = get_observer_meta(sat_coords)
-    # aia_lat = coord_meta['hglt_obs']
-    # aia_lon = coord_meta['hgln_obs']
-    # aia_dist = coord_meta['dsun_obs'] # instrument distance in units [m]
-    
-    #  # Convert into expected units/coordinate system for the render
-    # aia_dist = aia_dist*u.m.to(u.au) # convertion to [AU] with astropy
-
-
-
-    # 
-    # List of all fits files for SDO
-    sdo_files = sorted(glob.glob("/mnt/disks/data/raw/sdo_2012_08/1h_171/*.fits"))
-    sdo_meta = [load_observer_meta(filepath) for filepath in tqdm(sdo_files[0:5])]
-    print(sdo_meta)
-    
-    for i, (lat, lon, d, time) in tqdm(enumerate(sdo_meta), total=len(sdo_meta)):
-        # first_timestep = sdo_meta[0][3]
-        # print(first_timestep)
-        outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
-    
-    exit()
-    stereo_a_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_A.fits"))
-    stereo_b_files = sorted(glob.glob("/mnt/disks/data/raw/stereo_2012_08_converted_fov/171/*_B.fits"))
-    # Extract metadata from each fits file
-    # SDO positions as a function of time
-    stereo_a_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_a_files)]
-    stereo_b_meta = [load_observer_meta(filepath) for filepath in tqdm(stereo_b_files)]
-    
-   
-    # Do we need to use .append on observer_position to create more observers??
-    
-
-
-    
-    
-
-
-
-    aia_lat, aia_lon, aia_dist, sat_time = load_observer_meta(path_to_aia_file)
-    
-    n_points = 4
-    lat = np.linspace(aia_lat, aia_lat, n_points) # different latitudes for novel views
-    lon = np.linspace(aia_lon, aia_lon+360, n_points)
-    dist = np.linspace(aia_dist, aia_dist, n_points) 
-    time = np.zeros(n_points)  # Keep all observers at time 0
-    
-    points = list(zip(lat, lon, dist, time))
-    
-    print(f'points: {points}')
-    # print(f"Lat: {aia_lat}")     # Latitude of obs [deg]
-    # print(f"Lon: {aia_lon}")     # Longitude of obs [deg]
-    # print(f"Distance: {aia_dist}") # Distance of obs in units [m]; Needs to be converted to AU
-    # print(f"sat_time {sat_time}")
-    
-    # map.observer_coordinate - The Heliographic Stonyhurst Coordinate of the observer.
-    # sunpy.map.header_helper.get_observer_meta(observer, rsun: (Unit('Mm'), None) = None):
-    # Returns: coord_meta (dict) – WCS metadata, with the keys ['hgln_obs', 'hglt_obs', 'dsun_obs'], and additionally if rsun is given ['rsun_obs', 'rsun_ref'].
-
-    # gsunpy.map.header_helper.get_observer_meta(observer, rsun: (Unit('Mm'), None) = None)
-
-
-    # # Extract observation time 
-    # sat_time = s_map.date
-    # print(f"sat_time {sat_time}")
-    
-
-    # Make the satellite move position virtually and make virtual satellites 
-
-
-    
-    # Repeat process, but this time use ACTUAL satellite positions as a function of time
-    
-
+    # Render images
     images = []
     # Iterate over the unpacked point coordinates
-    for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
-        outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
+    for i, (lat, lon, d, time) in tqdm(enumerate(observer_meta), total=len(observer_meta)):
+        # Convert time to seconds
+        t = ((datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') - s_map_t).total_seconds()+t_shift*dt)/((t_f-t_i)*dt)
+        print(t * (t_f-t_i)*dt, t_i, t_f, t)
+        # Outputs
+        outputs = loader.load_observer_image(lat*u.deg, lon*u.deg, t, distance=d*u.AU, batch_size=batch_size, resolution=resolution)
         images.append(outputs['image'])
-    
-    # Iterate over wavelengths
+
+    # TODO: Modify for fits files
+    # Create render path directory if it doesnt exist. 
+    os.makedirs(render_path, exist_ok=True)
+    # Iterate over wavelengths and save images
     for n, wavelength in enumerate(wavelengths):    
         for i, image in enumerate(images):
             if output_format == 'jpg':
                 # Save as jpg
                 if i == 0:
-                    image_min = np.percentile(image, 1)  # np.nanmin(image[:,:,n])
-                    image_max =  np.percentile(image, 99)  # 0.9*np.nanmax(image[:,:,n])
+                    image_min = np.percentile(image, 1) 
+                    image_max =  np.percentile(image, 99) 
                 render.save_frame_as_jpg(i, image[:,:,n], wavelength, vmin=image_min, vmax=image_max)
 
-            elif output_format == 'fits':
+            if output_format == 'fits':
                 # i, point, model_output, wavelength,
                 # Save as FITS
-                render.save_frame_as_fits(i, (lat, lon, d, time), image[:,:,n], wavelength, obs_date=avg_time)
-            else:
-                # Print error if format is invalid
-                print('No valid format selected')
+                # TODO: Pass file header information
+                render.save_frame_as_fits(i, (lat, lon, d, time), image[:,:,n], wavelength)
+
