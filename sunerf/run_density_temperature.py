@@ -11,11 +11,15 @@ from sunerf.data.loader.multi_thermal import MultiThermalDataModule
 from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestImageCallback
 
+# Main function that sets up and runs the training process
 if __name__ == '__main__':
+    # Argument parser to handle command line inputs
     parser = argparse.ArgumentParser()
+    # Config file path argument
     parser.add_argument('--config', type=str)
     args = parser.parse_args()
 
+    # Load the configuration from the specified YAML file 
     with open(args.config, 'r') as stream:
         config = yaml.load(stream, Loader=yaml.SafeLoader)
 
