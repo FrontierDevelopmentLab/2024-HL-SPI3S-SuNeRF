@@ -342,7 +342,7 @@ if __name__ == '__main__':
     
             if output_format == 'jpg':
             # Save as jpg
-                if i == 0:
+                if j == 0 and i == 0:
                     image_min = np.percentile(image, 1, axis=(0, 1))
                     image_max = np.percentile(image, 99, axis=(0,1))
                 render.save_frame_as_jpg(i, observer_names[j], image, observer_wavelengths[j], vmin=image_min, vmax=image_max)
