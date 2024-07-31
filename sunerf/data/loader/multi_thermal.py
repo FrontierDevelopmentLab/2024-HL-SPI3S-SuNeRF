@@ -13,13 +13,14 @@ from sunerf.data.loader.base_loader import BaseDataModule
 from sunerf.train.callback import log_overview
 from sunerf.train.coordinate_transformation import pose_spherical
 from tqdm import tqdm
-from itertools import repeat
+from itertools import repeat, chain 
 import multiprocessing
 from sunpy.coordinates import frames
 from sunerf.data.ray_sampling import get_rays
-import datetime as dt
-from sunerf.data.loader.utils import loadMapStack
+import dateutil as dt
+from sunerf.data.utils import loadMapStack
 from astropy import units as u
+
 
 
 class MultiThermalDataModule(BaseDataModule):
@@ -28,19 +29,13 @@ class MultiThermalDataModule(BaseDataModule):
                  batch_size=int(2 ** 10), debug=False, cmap='gray', **kwargs):
         os.makedirs(working_dir, exist_ok=True)
 
-        data_dict = self.get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug)
-
-        o_times = data_dict['time']
-
-        # normalize datetime
-        ref_time = parse(ref_time) if ref_time is not None else min(o_times)
-        times = np.array([normalize_datetime(t, seconds_per_dt, ref_time) for t in o_times], dtype=np.float32)
+        data_dict = self.get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug, seconds_per_dt=seconds_per_dt, ref_time=ref_time)
 
         # unpack data
         images = data_dict['image']
         rays = data_dict['all_rays']
 
-        log_overview(images, data_dict['pose'], times, cmap, seconds_per_dt, ref_time)
+        log_overview(images, data_dict['pose'], np.unique(data_dict['times']), cmap, seconds_per_dt, ref_time)
 
         # select test image
         test_idx = len(images) // 6
@@ -118,7 +113,7 @@ class MultiThermalDataModule(BaseDataModule):
             time = file.split('T')[1].split('_')[0].split('.')[0]
             if len(time)==2:
                 time += ':00'
-            dates.append(dt.isoparse(f'{date}T{time}'))
+            dates.append(dt.parser.isoparse(f'{date}T{time}'))
         return dates
     
     def create_date_file_df(self, dates, files, wl, debug=False):
@@ -144,10 +139,10 @@ class MultiThermalDataModule(BaseDataModule):
 
         return df1
 
-    def get_data(self, data_path, Rs_per_ds, debug=False):
+    def get_data(self, data_path, Rs_per_ds, seconds_per_dt, ref_time, debug=False):
 
         # Load data
-        s_maps = sorted(glob.glob(data_path, recursive=True))
+        s_maps = sorted(glob.glob(data_path+'/**/*.fits', recursive=True))
 
         # Find unique data sources/instruments
         data_source_paths = np.unique(['/'.join(s_map.split('/')[:-2]) for s_map in s_maps])
@@ -187,34 +182,38 @@ class MultiThermalDataModule(BaseDataModule):
                     n = n+1
 
             if debug:
-                debug_index = np.min([10, joint_df.shape[0]])
+                debug_index = np.min([4, joint_df.shape[0]])
                 joint_df = joint_df.iloc[0:debug_index, :]
             data_sources[source]['file_stacks'] = joint_df.values.tolist()
 
         data_dict = {}
         for i, source in enumerate(data_sources.keys()):
 
-            # Extract filenames for stacks
-            imager_files = []
-            imager_columns = [col for col in data_sources[source]['file_stacks'].columns if 'files' in col]
-
-            for index, row in tqdm(data_sources[source]['file_stacks'].iterrows()):
-                imager_files.append(row[imager_columns].tolist())  # (channel, files)            
-
             # TODO: Add aia_preprocessing as a parameter for when working with multi-thermal observations
             with multiprocessing.Pool(os.cpu_count()) as p:
                 data = [v for v in
-                        tqdm(p.imap(self._load_map_data, zip(imager_files, repeat(Rs_per_ds))), total=len(imager_files), desc='Loading data')]
+                        tqdm(p.imap(self._load_map_data, zip(data_sources[source]['file_stacks'], repeat(Rs_per_ds), repeat(data_sources[source]['wavelengths']),
+                                                             repeat(seconds_per_dt), repeat(ref_time))), 
+                             total=len(data_sources[source]['file_stacks']), desc='Loading data')]
 
             if i==0:
                 for k in data[0].keys():
-                    data_dict[k] = np.stack([d[k] for d in data], axis=0)
+                    if k == 'pose':
+                        data_dict[k] = np.stack([d[k] for d in data], axis=0)
+                    else:
+                        data_dict[k] = np.concatenate([d[k] for d in data], axis=0)
             else:
                 for k in data[0].keys():
-                    data_dict[k] = np.stack([data_dict[k], np.stack([d[k] for d in data], axis=0)], axis=0)                 
+                    if k == 'pose':
+                        print(data_dict[k].shape)
+                        print(np.stack([d[k] for d in data], axis=0).shape)
+                        data_dict[k] = np.concatenate([data_dict[k], np.stack([d[k] for d in data], axis=0)], axis=0)
+                    else:
+                        data_dict[k] = np.concatenate([data_dict[k], np.concatenate([d[k] for d in data], axis=0)], axis=0)               
 
 
         # TODO: Complete the dictionary
+        
 
         # # Load files
         # rays = []
@@ -227,37 +226,37 @@ class MultiThermalDataModule(BaseDataModule):
         # return images, poses, rays, times, focal_lengths, wavelengths, shapes, entry_heights
 
 
-    def get_data(self, data_path, Rs_per_ds, debug=False):
-        files = sorted(glob.glob(data_path))
-        if debug:
-            files = files[::10]
+    # def get_data(self, data_path, Rs_per_ds, debug=False):
+    #     files = sorted(glob.glob(data_path))
+    #     if debug:
+    #         files = files[::10]
 
-        with multiprocessing.Pool(os.cpu_count()) as p:
-            data = [v for v in
-                    tqdm(p.imap(self._load_map_data, zip(files, repeat(Rs_per_ds))), total=len(files), desc='Loading data')]
-        data_dict = {}
-        for k in data[0].keys():
-            data_dict[k] = np.stack([d[k] for d in data], axis=0)
+    #     with multiprocessing.Pool(os.cpu_count()) as p:
+    #         data = [v for v in
+    #                 tqdm(p.imap(self._load_map_data, zip(files, repeat(Rs_per_ds))), total=len(files), desc='Loading data')]
+    #     data_dict = {}
+    #     for k in data[0].keys():
+    #         data_dict[k] = np.stack([d[k] for d in data], axis=0)
 
-        ref_map = Map(files[0])
-        data_dict['resolution'] = ref_map.data.shape
-        data_dict['wcs'] = ref_map.wcs
-        data_dict['wavelength'] = ref_map.wavelength
+    #     ref_map = Map(files[0])
+    #     data_dict['resolution'] = ref_map.data.shape
+    #     data_dict['wcs'] = ref_map.wcs
+    #     data_dict['wavelength'] = ref_map.wavelength
 
         return data_dict
 
 
     def _load_map_data(self, data):
 
-        stack_path, Rs_per_ds = data
+        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time = data
 
         imager_stack = loadMapStack(stack_path, resolution=None, remove_nans=True,
                                     map_reproject=False, aia_preprocessing=False, 
                                     apply_norm=False, percentile_clip=None)
         
         # Read first file
-        s_map = Map(imager_stack[0])
-        time = s_map.date.datetime
+        s_map = Map(stack_path[0])
+        time = normalize_datetime(s_map.date.datetime, seconds_per_dt, ref_time)
         pose = pose_spherical(-s_map.carrington_longitude.to(u.rad).value,
                             s_map.carrington_latitude.to(u.rad).value,
                             s_map.dsun.to_value(u.solRad) / Rs_per_ds).float().numpy()
@@ -268,4 +267,18 @@ class MultiThermalDataModule(BaseDataModule):
 
         all_rays = all_rays.reshape((-1, 2, 3))
 
-        return {'image': image, 'pose': pose, 'all_rays': all_rays, 'time': time, }
+        extended_stack = np.zeros((wavelengths.shape[0], imager_stack.shape[1], imager_stack.shape[2])).astype(np.float32)
+        wavelength_stack = extended_stack*0
+
+        n = 0
+        for i, wl in enumerate(wavelengths):
+            if wl != 0:
+                extended_stack[i, :, :] = image[n, :, :]
+                wavelength_stack[i, :, :] = wl
+                n += 1
+
+        extended_stack = extended_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0]))
+        wavelength_stack = wavelength_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0]))
+        time = time*np.ones(all_rays.shape[0])                           
+
+        return {'image': extended_stack, 'pose': pose, 'all_rays': all_rays, 'time': time, 'wavelength':wavelength_stack}

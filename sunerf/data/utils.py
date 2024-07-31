@@ -69,7 +69,7 @@ def loadMap(file_path, resolution:int=None, map_reproject:bool=False, calibratio
     return s_map
 
 
-def loadMapStack(file_paths:list, resolution:int=N, remove_nans:bool=True, map_reproject:bool=False, aia_preprocessing:bool=True,
+def loadMapStack(file_paths:list, resolution:int=1024, remove_nans:bool=True, map_reproject:bool=False, aia_preprocessing:bool=True,
                  calibration:str='auto', apply_norm:bool=True, percentile_clip:float=None)->np.array:
     """Load a stack of FITS files, resample ot specific resolution, and stack hem.
 
@@ -120,4 +120,4 @@ def loadMapStack(file_paths:list, resolution:int=N, remove_nans:bool=True, map_r
             stack[i, :, :][stack[i, :, :] < 0] = 0
             stack[i, :, :][stack[i, :, :] > percentiles[0]] = percentiles[0]        
 
-    return stack.data
+    return stack

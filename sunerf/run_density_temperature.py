@@ -6,7 +6,7 @@ import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
-
+import dateutil as dt
 from sunerf.data.loader.multi_thermal import MultiThermalDataModule
 from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestImageCallback
@@ -41,6 +41,8 @@ if __name__ == '__main__':
     logger = WandbLogger(**logging_config, save_dir=working_dir)
 
     # initialize data module and model
+    # TODO: Add ref image
+    data_config['ref_time'] = dt.parser.isoparse(data_config['ref_time'])
     data_module = MultiThermalDataModule(**data_config, working_dir=working_dir)
 
     # initialize SuNeRF model
