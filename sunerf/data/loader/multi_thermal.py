@@ -35,7 +35,7 @@ class MultiThermalDataModule(BaseDataModule):
         images = data_dict['image']
         rays = data_dict['all_rays']
 
-        log_overview(images, data_dict['pose'], np.unique(data_dict['times']), cmap, seconds_per_dt, ref_time)
+        log_overview(images, data_dict['pose'], np.unique(data_dict['time']), cmap, seconds_per_dt, ref_time)
 
         # select test image
         test_idx = len(images) // 6
@@ -205,8 +205,6 @@ class MultiThermalDataModule(BaseDataModule):
             else:
                 for k in data[0].keys():
                     if k == 'pose':
-                        print(data_dict[k].shape)
-                        print(np.stack([d[k] for d in data], axis=0).shape)
                         data_dict[k] = np.concatenate([data_dict[k], np.stack([d[k] for d in data], axis=0)], axis=0)
                     else:
                         data_dict[k] = np.concatenate([data_dict[k], np.concatenate([d[k] for d in data], axis=0)], axis=0)               
