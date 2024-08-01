@@ -2,12 +2,10 @@ import argparse
 import os
 from datetime import datetime
 from astropy import units as u
-from astropy.coordinates import SkyCoord
-from astropy.io import fits
 import matplotlib.pyplot as plt
 import numpy as np
 import sunpy.visualization.colormaps as cm
-from sunpy.map import Map, make_fitswcs_header, all_coordinates_from_map, header_helper
+from sunpy.map import Map
 from sunpy.map.header_helper import get_observer_meta
 from tqdm import tqdm
 # For density and temperature rendering
@@ -15,11 +13,7 @@ from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTran
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
-from sunpy.coordinates import get_body_heliographic_stonyhurst
-import sunpy.sun.constants as constants
 import glob
-import sunpy.map
-from sunpy.data.sample import HMI_LOS_IMAGE
 
 
 class ImageRender:
@@ -40,23 +34,25 @@ class ImageRender:
         # Path to save rendered images 
         self.render_path = render_path
 
-    def save_frame_as_jpg(self, i, observer_name, images, wavelengths, vmin=None, vmax=None, overwrite=True):
+    def frame_to_jpeg(self, i, observer_name, images, wavelengths, vmin=None, vmax=None, overwrite=True):
         r""" Method that saves an image from a viewpoint as the ith frame as jpg file
 
         Parameters
         ----------
         i : int
             frame number
-        model_output : numpy array
+        observer_name : str
+            name of the observer
+        images : numpy array
             model output image
-        wavelength : int
-            wavelength of the image
+        wavelengths : list
 
         Returns
         -------
         None
         """
 
+        # Get the min and max values for the colormap
         if vmin is None:
             vmin = np.percentile(images, 1, axis=(0,1))
         if vmax is None:
@@ -70,14 +66,12 @@ class ImageRender:
             # Save image as jpg
             img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
 
-            # Save image if it doesn't exist
-            # if not os.path.exists(img_path):
-            # Normalize the image
-            image = images[:, :, n]   # /np.nanmean(model_output)  # TODO: Consider normalizing over full time sequence
+            # Get the image
+            image = images[:, :, n]
             # Get the colormap
             cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
-            # Save the image
-            # plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
+
+            # Draw the image
             fig_sizex = 4
             fig_sizey = 4
             fig = plt.figure(figsize=(fig_sizex, fig_sizey), constrained_layout = False)
@@ -88,11 +82,7 @@ class ImageRender:
             plt.draw()
             
             # Verify if files exists and whether to overwrite.
-            if not os.path.exists(img_path) or overwrite:
-                # if the file does not exist or if overwrite is true
-                plt.savefig(img_path, format='jpeg', dpi=300)
-            # if file exists and overwrite is True
-            elif os.path.exists(img_path) and overwrite:
+            if (not os.path.exists(img_path) or overwrite) or (os.path.exists(img_path) and overwrite):
                 plt.savefig(img_path, format='jpeg', dpi=300)
             # If file exists AND overwrite is false
             else:
@@ -345,5 +335,5 @@ if __name__ == '__main__':
                 if j == 0 and i == 0:
                     image_min = np.percentile(image, 1, axis=(0, 1))
                     image_max = np.percentile(image, 99, axis=(0,1))
-                render.save_frame_as_jpg(i, observer_names[j], image, observer_wavelengths[j], vmin=image_min, vmax=image_max)
+                render.frame_to_jpeg(i, observer_names[j], image, observer_wavelengths[j], vmin=image_min, vmax=image_max)
                     

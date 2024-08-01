@@ -34,28 +34,24 @@ class MultiThermalDataModule(BaseDataModule):
         # unpack data
         images = data_dict['image']
         rays = data_dict['all_rays']
+        times = data_dict['time']
+        wavelengths = data_dict['wavelength']
 
-        log_overview(images, data_dict['pose'], np.unique(data_dict['time']), cmap, seconds_per_dt, ref_time)
+        # log_overview(images, data_dict['pose'], np.unique(times), cmap, seconds_per_dt, ref_time)
 
         # select test image
         test_idx = len(images) // 6
         mask = np.ones(len(images), dtype=bool)
         mask[test_idx] = False
 
-        valid_rays, valid_times, valid_images = rays[~mask], times[~mask], images[~mask]
+        valid_rays, valid_times, valid_images, valid_wavelengths = rays[~mask], times[~mask], images[~mask], wavelengths[~mask]
 
         # load all training rays
-        rays, times, images = rays[mask], times[mask], images[mask]
-
-        # flatten rays
-        rays = rays.reshape((-1, 2, 3))
-        times = np.ones_like(images) * times[:, None, None]  # broadcast time to image shape
-        times = times.reshape(-1, 1)
-        images = images.reshape(-1, 1)
+        rays, times, images, wavelengths = rays[mask], times[mask], images[mask], wavelengths[mask]
 
         # shuffle
         r = np.random.permutation(rays.shape[0])
-        rays, times, images = rays[r], times[r], images[r]
+        rays, times, images, wavelengths = rays[r], times[r], images[r], wavelengths[r]
 
         # save npy files
         # create file names
@@ -63,33 +59,30 @@ class MultiThermalDataModule(BaseDataModule):
         npy_rays = os.path.join(working_dir, 'rays_batches.npy')
         npy_times = os.path.join(working_dir, 'times_batches.npy')
         npy_images = os.path.join(working_dir, 'images_batches.npy')
+        npy_wavelengths = os.path.join(working_dir, 'wavelengths_batches.npy')
 
         # save to disk
         np.save(npy_rays, rays)
         np.save(npy_times, times)
         np.save(npy_images, images)
+        np.save(npy_wavelengths, wavelengths)
 
         # adjust batch size
         N_GPUS = torch.cuda.device_count()
         batch_size = int(batch_size) * N_GPUS
 
         # init train dataset
-        train_dataset = MmapDataset({'target_image': npy_images, 'rays': npy_rays, 'time': npy_times},
+        train_dataset = MmapDataset({'target_image': npy_images, 'rays': npy_rays, 'time': npy_times, 'wavelength': npy_wavelengths},
                                     batch_size=batch_size)
 
-        valid_rays = valid_rays.reshape((-1, 2, 3))
-        valid_times = np.ones_like(valid_images) * valid_times[:, None, None]
-        valid_times = valid_times.reshape(-1, 1)
-        valid_images = valid_images.reshape(-1, 1)
-
-        valid_dataset = ArrayDataset({'target_image': valid_images, 'rays': valid_rays, 'time': valid_times},
+        valid_dataset = ArrayDataset({'target_image': valid_images, 'rays': valid_rays, 'time': valid_times, 'wavelength': valid_wavelengths},
                                      batch_size=batch_size)
 
-        config = {'type': 'emission', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,
-                  'wcs': data_dict['wcs'], 'resolution': data_dict['resolution'], 'wavelength': data_dict['wavelength'],
-                  'times': o_times, 'cmap': cmap}
+        config = {'type': 'D_T', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,
+                  'wavelength': data_dict['wavelength'],
+                  'times': data_dict['time'], 'cmap': cmap}
         super().__init__({'tracing': train_dataset}, {'test_image': valid_dataset},
-                         start_time=o_times.min(), end_time=o_times.max(),
+                         start_time=data_dict['time'].min(), end_time=data_dict['time'].max(),
                          Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt, ref_time=ref_time,
                          module_config=config, **kwargs)
         
@@ -182,7 +175,7 @@ class MultiThermalDataModule(BaseDataModule):
                     n = n+1
 
             if debug:
-                debug_index = np.min([4, joint_df.shape[0]])
+                debug_index = np.min([3, joint_df.shape[0]])
                 joint_df = joint_df.iloc[0:debug_index, :]
             data_sources[source]['file_stacks'] = joint_df.values.tolist()
 
@@ -208,38 +201,6 @@ class MultiThermalDataModule(BaseDataModule):
                         data_dict[k] = np.concatenate([data_dict[k], np.stack([d[k] for d in data], axis=0)], axis=0)
                     else:
                         data_dict[k] = np.concatenate([data_dict[k], np.concatenate([d[k] for d in data], axis=0)], axis=0)               
-
-
-        # TODO: Complete the dictionary
-        
-
-        # # Load files
-        # rays = []
-        # for i, source in enumerate(data_sources.keys()):
-        #     rays_ds = rays_from_stacksDataset(data_sources[source]['file_stacks'], data_sources[source]['wavelengths'], config_data=config_data, aia_preprocessing=False, resolution=None)
-        #     rays += list(read_fits_stacks(rays_ds))
-
-        # images, poses, rays, times, focal_lengths, wavelengths, shapes, entry_heights = list(map(list, zip(*rays)))
-
-        # return images, poses, rays, times, focal_lengths, wavelengths, shapes, entry_heights
-
-
-    # def get_data(self, data_path, Rs_per_ds, debug=False):
-    #     files = sorted(glob.glob(data_path))
-    #     if debug:
-    #         files = files[::10]
-
-    #     with multiprocessing.Pool(os.cpu_count()) as p:
-    #         data = [v for v in
-    #                 tqdm(p.imap(self._load_map_data, zip(files, repeat(Rs_per_ds))), total=len(files), desc='Loading data')]
-    #     data_dict = {}
-    #     for k in data[0].keys():
-    #         data_dict[k] = np.stack([d[k] for d in data], axis=0)
-
-    #     ref_map = Map(files[0])
-    #     data_dict['resolution'] = ref_map.data.shape
-    #     data_dict['wcs'] = ref_map.wcs
-    #     data_dict['wavelength'] = ref_map.wavelength
 
         return data_dict
 

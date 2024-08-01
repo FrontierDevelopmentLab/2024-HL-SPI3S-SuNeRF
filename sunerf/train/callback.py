@@ -84,7 +84,7 @@ def plot_samples(fine_image, coarse_image, height_map, absorption_map, target_im
     plt.close('all')
 
 
-def log_overview(images, poses, times, cmap, seconds_per_dt, ref_time):
+def log_overview(images, poses, times, cmap, seconds_per_dt, ref_time, wavelengths=None):
     dirs = np.stack([np.sum([0, 0, -1] * pose[:3, :3], axis=-1) for pose in poses])
     origins = poses[:, :3, -1]
     colors = plt.get_cmap('viridis')(Normalize()(times))
@@ -129,7 +129,11 @@ def log_overview(images, poses, times, cmap, seconds_per_dt, ref_time):
 
         ax = plt.subplot(122)
         # plot corresponding image
-        ax.imshow(img, norm=norm, cmap=cmap)
+        if cmap is not None:
+            ax.imshow(img, norm=norm, cmap=cmap)
+        if wavelengths is not None:
+            cmap = plt.get_cmap(f'sdoaia{int(wavelengths[i])}').copy()
+            ax.imshow(img, norm=norm, cmap=cmap)
         ax.set_axis_off()
         ax.set_title('Time: %s' % unnormalize_datetime(times[i], seconds_per_dt, ref_time).isoformat(' '))
 
