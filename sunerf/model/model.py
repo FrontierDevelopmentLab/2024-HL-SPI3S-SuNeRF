@@ -54,7 +54,7 @@ class NeRF(nn.Module):
             #     x = torch.cat([x, x_input], dim=-1)
         x = self.out_layer(x)
 
-        return x
+        return {'inferences':x}
 
 
 class EmissionModel(NeRF):
@@ -130,3 +130,136 @@ class PositionalEncoding(nn.Module):
                (torch.cos(x[:, None, :] * f / self.scale_factor)).reshape(x.shape[0], -1)
                ]
         return torch.concat(enc, dim=-1)
+
+
+
+class NeRF_DT(NeRF):
+    r"""
+    Neural radiance fields module.
+    """
+
+    def __init__(
+            self,
+            d_input: int = 4,
+            d_output: int = 2,
+            n_layers: int = 8,
+            d_filter: int = 512,
+            skip: Tuple[int] = (),
+            encoding='positional'
+    ):
+        super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
+
+        self.log_absortpion = nn.ParameterDict([
+                                ['94',  torch.tensor(20.4, dtype=torch.float32)],
+                                ['131', torch.tensor(20.2, dtype=torch.float32)],
+                                ['171', torch.tensor(20.0, dtype=torch.float32)],
+                                ['193', torch.tensor(19.8, dtype=torch.float32)],
+                                ['211', torch.tensor(19.6, dtype=torch.float32)],
+                                ['304', torch.tensor(19.4, dtype=torch.float32)],
+                                ['335', torch.tensor(19.2, dtype=torch.float32)]
+                        ])
+
+        self.volumetric_constant = nn.Parameter(torch.tensor(1.0, dtype=torch.float32, requires_grad=True))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        Forward pass with optional view direction.
+        """
+
+        # Apply forward pass
+        x = self.act(self.in_layer(x))
+        for i, layer in enumerate(self.layers):
+            x = self.act(layer(x))
+            # if i in self.skip:
+            #     x = torch.cat([x, x_input], dim=-1)
+        x = self.out_layer(x)
+
+        return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+
+# class NeRF_dens_temp(nn.Module):
+#   r"""
+#   Neural radiance fields module.
+#   """
+#   def __init__(
+#     self,
+#     encoding_fn: Callable[[torch.Tensor], torch.Tensor],
+#     d_input: int = 4,
+#     d_output: int = 2,
+#     n_layers: int = 8,
+#     d_filter: int = 256,
+#     skip: Tuple[int] = (4,),
+#     d_viewdirs: Optional[int] = None
+#   ):
+#     super().__init__()
+#     self.encoding_fn = encoding_fn
+#     self.d_input = d_input
+#     self.skip = skip
+#     self.act = Sine()
+#     self.d_viewdirs = d_viewdirs
+
+#     # Create model layers
+#     self.layers = nn.ModuleList(
+#       [nn.Linear(self.d_input, d_filter)] +
+#       [nn.Linear(d_filter + self.d_input, d_filter) if i in skip \
+#        else nn.Linear(d_filter, d_filter) for i in range(n_layers - 1)]
+#     )
+
+#     # Bottleneck layers
+#     if self.d_viewdirs is not None:
+#       # If using viewdirs, split alpha and RGB
+#       self.alpha_out = nn.Linear(d_filter, 1)
+#       self.rgb_filters = nn.Linear(d_filter, d_filter)
+#       self.branch = nn.Linear(d_filter + self.d_viewdirs, d_filter // 2)
+#       self.output = nn.Linear(d_filter // 2, 3)
+#     else:
+#       # If no viewdirs, use simpler output
+#       self.output = nn.Linear(d_filter, d_output)
+
+#     self.log_absortpion = nn.ParameterDict([
+#                                         ['94',  torch.rand(1, dtype=torch.float32)[0]],
+#                                         ['131', torch.rand(1, dtype=torch.float32)[0]],
+#                                         ['171', torch.rand(1, dtype=torch.float32)[0]],
+#                                         ['193', torch.rand(1, dtype=torch.float32)[0]],
+#                                         ['211', torch.rand(1, dtype=torch.float32)[0]],
+#                                         ['304', torch.rand(1, dtype=torch.float32)[0]],
+#                                         ['335', torch.rand(1, dtype=torch.float32)[0]]
+#                                 ])
+
+#     self.volumetric_constant = nn.Parameter(torch.tensor(20.0, dtype=torch.float32, requires_grad=True))
+
+#   def forward(
+#     self,
+#     x: torch.Tensor,
+#     viewdirs: Optional[torch.Tensor] = None,
+#   ) -> torch.Tensor:
+#     r"""
+#     Forward pass with optional view direction.
+#     """
+#     # Cannot use viewdirs if instantiated with d_viewdirs = None
+#     if self.d_viewdirs is None and viewdirs is not None:
+#       raise ValueError('Cannot input x_direction if d_viewdirs was not given.')
+
+#     # Apply forward pass up to bottleneck
+#     x_input = x
+#     for i, layer in enumerate(self.layers):
+#       x = self.act(layer(x))
+#       if i in self.skip:
+#         x = torch.cat([x, x_input], dim=-1)
+
+#     # Apply bottleneck
+#     if self.d_viewdirs is not None:
+#       # Split alpha from network output
+#       alpha = self.alpha_out(x)
+
+#       # Pass through bottleneck to get RGB
+#       x = self.rgb_filters(x)
+#       x = torch.concat([x, viewdirs], dim=-1)
+#       x = self.act(self.branch(x))
+#       x = self.output(x)
+
+#       # Concatenate alphas to output
+#       x = torch.concat([x, alpha], dim=-1)
+#     else:
+#       # Simple output
+#       x = self.output(x)
+#     return x, self.log_absortpion, self.volumetric_constant

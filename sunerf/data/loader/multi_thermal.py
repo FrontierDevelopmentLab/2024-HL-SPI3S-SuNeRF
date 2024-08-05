@@ -36,18 +36,22 @@ class MultiThermalDataModule(BaseDataModule):
         rays = data_dict['all_rays']
         times = data_dict['time']
         wavelengths = data_dict['wavelength']
+        shapes = data_dict['shape']
 
         # log_overview(images, data_dict['pose'], np.unique(times), cmap, seconds_per_dt, ref_time)
 
         # select test image
-        test_idx = len(images) // 6
-        mask = np.ones(len(images), dtype=bool)
-        mask[test_idx] = False
+        valid_index = len(images) // 6
 
-        valid_rays, valid_times, valid_images, valid_wavelengths = rays[~mask], times[~mask], images[~mask], wavelengths[~mask]
+        valid_rays, valid_times, valid_images, valid_wavelengths, valid_shapes = rays[valid_index], times[valid_index], images[valid_index], wavelengths[valid_index], shapes[valid_index]
 
         # load all training rays
-        rays, times, images, wavelengths = rays[mask], times[mask], images[mask], wavelengths[mask]
+        train_index = (np.arange(len(images)) != valid_index).nonzero()[0].tolist()
+        # Index list using list of indices
+        rays = np.concatenate([rays[i] for i in train_index], axis=0)
+        times = np.concatenate([times[i] for i in train_index], axis=0)
+        images = np.concatenate([images[i] for i in train_index], axis=0)
+        wavelengths = np.concatenate([wavelengths[i] for i in train_index], axis=0)
 
         # shuffle
         r = np.random.permutation(rays.shape[0])
@@ -79,10 +83,10 @@ class MultiThermalDataModule(BaseDataModule):
                                      batch_size=batch_size)
 
         config = {'type': 'D_T', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,
-                  'wavelength': data_dict['wavelength'],
-                  'times': data_dict['time'], 'cmap': cmap}
+                  'wavelengths': valid_wavelengths[0], 'resolution': valid_shapes,
+                  'times': valid_times[0], 'cmap': cmap}
         super().__init__({'tracing': train_dataset}, {'test_image': valid_dataset},
-                         start_time=data_dict['time'].min(), end_time=data_dict['time'].max(),
+                         start_time=times.min(), end_time=times.max(),
                          Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt, ref_time=ref_time,
                          module_config=config, **kwargs)
         
@@ -175,7 +179,7 @@ class MultiThermalDataModule(BaseDataModule):
                     n = n+1
 
             if debug:
-                debug_index = np.min([3, joint_df.shape[0]])
+                debug_index = np.min([2, joint_df.shape[0]])
                 joint_df = joint_df.iloc[0:debug_index, :]
             data_sources[source]['file_stacks'] = joint_df.values.tolist()
 
@@ -191,16 +195,10 @@ class MultiThermalDataModule(BaseDataModule):
 
             if i==0:
                 for k in data[0].keys():
-                    if k == 'pose':
-                        data_dict[k] = np.stack([d[k] for d in data], axis=0)
-                    else:
-                        data_dict[k] = np.concatenate([d[k] for d in data], axis=0)
+                    data_dict[k] = [d[k] for d in data]
             else:
                 for k in data[0].keys():
-                    if k == 'pose':
-                        data_dict[k] = np.concatenate([data_dict[k], np.stack([d[k] for d in data], axis=0)], axis=0)
-                    else:
-                        data_dict[k] = np.concatenate([data_dict[k], np.concatenate([d[k] for d in data], axis=0)], axis=0)               
+                    data_dict[k] += [d[k] for d in data]
 
         return data_dict
 
@@ -238,6 +236,7 @@ class MultiThermalDataModule(BaseDataModule):
 
         extended_stack = extended_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0]))
         wavelength_stack = wavelength_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0]))
-        time = time*np.ones(all_rays.shape[0])                           
+        time = (time*np.ones(all_rays.shape[0])[:, None]).astype(np.float32)
+        shape = imager_stack.shape[1:]                      
 
-        return {'image': extended_stack, 'pose': pose, 'all_rays': all_rays, 'time': time, 'wavelength':wavelength_stack}
+        return {'image': extended_stack, 'pose': pose, 'all_rays': all_rays, 'time': time, 'wavelength':wavelength_stack, 'shape': shape}

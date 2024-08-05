@@ -150,7 +150,7 @@ class EmissionSuNeRFModule(BaseSuNeRFModule):
 
 
 class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
-    def __init__(self, Rs_per_ds, seconds_per_dt, image_scaling_config,
+    def __init__(self, Rs_per_ds, seconds_per_dt, image_scaling_config, model, loss=nn.MSELoss(), 
                  lambda_image=1.0, lambda_regularization=1.0,
                  sampling_config=None, hierarchical_sampling_config=None,
                  model_config=None, **kwargs):
@@ -162,33 +162,32 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
         rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=Rs_per_ds,
                                                         sampling_config=sampling_config,
                                                         hierarchical_sampling_config=hierarchical_sampling_config,
-                                                        model_config=model_config)
+                                                        model_config=model_config, model=model)
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
 
-        self.image_scaling = ImageAsinhScaling(**image_scaling_config)
-        self.mse_loss = nn.MSELoss()
+        self.loss = loss
 
     def training_step(self, batch, batch_nb):
-        rays, time, target_image = batch['tracing']['rays'], batch['tracing']['time'], batch['tracing']['target_image']
+        rays, time, target_image, wavelengths = batch['tracing']['rays'], batch['tracing']['time'], batch['tracing'][
+            'target_image'], batch['tracing']['wavelength']
         rays_o, rays_d = rays[:, 0], rays[:, 1]
         # Run one iteration of TinyNeRF and get the rendered filtergrams.
-        outputs = self.rendering(rays_o, rays_d, time)
+        outputs = self.rendering(rays_o, rays_d, time, wavelengths)
 
         # Check for any numerical issues.
         for k, v in outputs.items():
             assert not torch.isnan(v).any(), f"! [Numerical Alert] {k} contains NaN."
             assert not torch.isinf(v).any(), f"! [Numerical Alert] {k} contains Inf."
 
-        # backpropagation
-        target_image = self.image_scaling(target_image)
+
         # optimize coarse model
-        coarse_image = self.image_scaling(outputs['coarse_image'])
-        coarse_loss = self.mse_loss(coarse_image, target_image)
+        coarse_image = outputs['coarse_image']
+        coarse_loss = self.loss(coarse_image, target_image)
         # optimize fine model
-        fine_image = self.image_scaling(outputs['fine_image'])
-        fine_loss = self.mse_loss(fine_image, target_image)
+        fine_image = outputs['fine_image']
+        fine_loss = self.loss(fine_image, target_image)
 
         regularization_loss = outputs['regularization'].mean()  # suppress unconstrained regions
         loss = (self.lambda_image * (coarse_loss + fine_loss) +
@@ -208,10 +207,10 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
     def validation_step(self, batch, batch_nb, **kwargs):
         dataloader_idx = kwargs['dataloader_idx'] if 'dataloader_idx' in kwargs else 0
         if dataloader_idx == 0:
-            rays, time, target_image = batch['rays'], batch['time'], batch['target_image']
+            rays, time, target_image, wavelengths = batch['rays'], batch['time'], batch['target_image'], batch[
+                'wavelength']
             rays_o, rays_d = rays[:, 0], rays[:, 1]
-
-            outputs = self.rendering(rays_o, rays_d, time)
+            outputs = self.rendering(rays_o, rays_d, time, wavelengths)
 
             distance = rays_o.pow(2).sum(-1).pow(0.5)
             return {'target_image': target_image,
