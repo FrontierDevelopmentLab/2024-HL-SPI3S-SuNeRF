@@ -7,7 +7,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 import dateutil as dt
-from sunerf.data.loader.multi_thermal import MultiThermalDataModule
+from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
 from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.model import NeRF_DT
