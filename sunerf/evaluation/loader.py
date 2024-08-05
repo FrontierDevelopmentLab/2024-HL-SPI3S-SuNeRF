@@ -147,18 +147,18 @@ class ModelLoader(SuNeRFLoader):
                                           if ('t_obs' in ref_map.meta) else ref_map.meta['date-obs'], 
                                           '%Y-%m-%dT%H:%M:%S.%f')
 
-    def process_batch(self, b_rays_o, b_rays_d, b_time):
-        b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+    def process_batch(self, b_rays_o, b_rays_d, b_time, b_wl):
+        b_outs = self.rendering(b_rays_o, b_rays_d, b_time, b_wl)
         return b_outs
 
-    def process_batch_with_index(self, index, b_rays_o, b_rays_d, b_time):
-            result = self.process_batch(b_rays_o, b_rays_d, b_time)
+    def process_batch_with_index(self, index, b_rays_o, b_rays_d, b_time, b_wl):
+            result = self.process_batch(b_rays_o, b_rays_d, b_time, b_wl)
             return index, result
 
 
     @torch.no_grad()
     def render_observer_image(self, lat: u, lon: u, time: float,
-                            distance=(1 * u.AU).to(u.solRad),
+                            distance=(1 * u.AU).to(u.solRad), wl: np.ndarray = None,
                             center: Tuple[float, float, float] = None, resolution=None,
                             batch_size: int = 4096):
         """ Render observer image at a given time and location.
@@ -202,6 +202,7 @@ class ModelLoader(SuNeRFLoader):
         # Convert rays to tensors
         rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
 
+
         # Get image shape
         img_shape = rays_o.shape[:2]
         # Flatten rays
@@ -216,12 +217,14 @@ class ModelLoader(SuNeRFLoader):
         rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
             torch.split(flat_rays_d, batch_size), \
             torch.split(flat_time, batch_size)
+        wl = torch.tensor(wl).to(self.device)
+        wl = wl[None, :].expand(rays_o[0].shape[0], wl.shape[0])
 
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time)) for
+            futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, wl)) for
                        i, (b_rays_o, b_rays_d, b_time) in enumerate(zip(rays_o, rays_d, time))]
             results = [(i, future.result()) for i, future in futures]
 

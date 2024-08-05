@@ -96,7 +96,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
     SuNeRF model for rendering filtergrams.
     """
 
-    def __init__(self, wavelengths, model_config=None, device=None, aia_exp_time=2.9, pixel_intensity_factor=1e10, **kwargs):
+    def __init__(self, model_config=None, device=None, aia_exp_time=2.9, pixel_intensity_factor=1e10, **kwargs):
         """ Initialize the DensityTemperatureRadiativeTransfer model.
 
         Parameters
@@ -124,8 +124,6 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # Initialize the device
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
         self.device = device
-        # Initialize the wavelengths
-        self.wavelengths = torch.tensor(wavelengths).to(device)
         # Initialize the pixel intensity factor
         self.pixel_intensity_factor = pixel_intensity_factor
 
@@ -147,7 +145,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                                                      torch.from_numpy(response).float().to(self.device),
                                                      method='linear', extrap=0)
 
-    def _render(self, model, query_points, rays_d, rays_o, z_vals):
+    def _render(self, model, query_points, rays_d, rays_o, z_vals, wavelengths):
         """ Render the filtergrams from density and temperature fields.
 
         Parameters
@@ -180,17 +178,18 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         state = model(flat_query_points)
 
         # Save the model output and parameters in the state dictionary
-        state['rho_T'] = state['rho_T'].reshape(*query_points_shape, state['rho_T'].shape[-1])
+        state['inferences'] = state['inferences'].reshape(*query_points_shape, state['inferences'].shape[-1])
         state['z_vals'] = z_vals
         state['rays_d'] = rays_d
-        state['wavelengths'] = self.wavelengths
+        state['wavelengths'] = wavelengths
+        # TODO: Make sure emission & absorption work
         # Perform differentiable volume rendering to re-synthesize the filtergrams.
-        # state = {'raw': raw, 'z_vals': z_vals, 'rays_d': rays_d}  # TODO include wavelengths
+        # state = {'raw': raw, 'z_vals': z_vals, 'rays_d': rays_d}  
         out = self.raw2outputs(**state)
         # out contains the rendered filtergrams, the weights of the filtergrams and the absorption coefficient
         return out
     
-    def raw2outputs(self, rho_T: torch.Tensor, log_abs: nn.ParameterDict, vol_c: torch.Tensor, z_vals: torch.Tensor,
+    def raw2outputs(self, inferences: torch.Tensor, log_abs: nn.ParameterDict, vol_c: torch.Tensor, z_vals: torch.Tensor,
                     rays_d: torch.Tensor, wavelengths: torch.Tensor):
         """ Convert the raw NeRF output into emission and absorption.
 
@@ -217,7 +216,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             - weights: Weights of the filtergrams.
             - absorption: Absorption coefficient.
         """
-        wavelengths = wavelengths[None, None, :] # TODO: Fix broadcasting later for multi wavelength
+        wavelengths = wavelengths[:, None, :].expand(wavelengths.shape[0], inferences.shape[1], wavelengths.shape[1])
 
         # Difference between consecutive elements of `z_vals`. [n_rays, n_samples]
         # compute line element (dz) for integration
@@ -235,19 +234,19 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # Get log log_density and expand to match size of wavelength channels
         # density = torch.float_power(10, nn.functional.relu(raw[0][...,0])+base_rho)
         # density = (nn.functional.relu(rho_T[...,0])*self.norm_rho).pow(1/self.pow_rho) + self.base_rho
-        density = torch.exp(nn.functional.relu(rho_T[...,0]))
-        density = density[:, :, None].repeat(1,1,wavelengths.shape[2])
+        density = torch.exp(nn.functional.relu(inferences[...,0]))
+        density = density[:, :, None].expand(density.shape[0], density.shape[1], wavelengths.shape[2])
 
         # Get log_temperature and expand to match size of wavelength channels
-        log_temperature = nn.functional.relu(rho_T[...,1])
-        log_temperature = log_temperature[:, :, None].repeat(1,1,wavelengths.shape[2])
+        log_temperature = nn.functional.relu(inferences[...,1])
+        log_temperature = log_temperature[:, :, None].expand(log_temperature.shape[0], log_temperature.shape[1], wavelengths.shape[2])
 
         temperature_response = torch.zeros_like(log_temperature)
         for wavelength in torch.unique(wavelengths):
             if wavelength > 0:
                 wavelength_key = int(wavelength.detach().cpu().numpy().item())
                 tmp_response = self.response[wavelength_key](log_temperature.flatten()).reshape(temperature_response.shape)
-                temperature_response[wavelengths*torch.ones_like(temperature_response)==wavelength] = tmp_response[wavelengths*torch.ones_like(temperature_response)==wavelength]
+                temperature_response[wavelengths==wavelength] = tmp_response[wavelengths==wavelength]
 
         # Get absorption coefficient
         absorption_coefficients = torch.zeros_like(wavelengths).float()
@@ -266,7 +265,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1) * vol_c * self.pixel_intensity_factor   # TODO: Check which z_vals indexes should go here
 
         # set the weights to the intensity contributions
-        weights = (nn.functional.relu(rho_T[...,0]))
+        weights = (nn.functional.relu(inferences[...,0]))
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
         return {'image': pixel_intensity, 'weights': weights, 'absorption': absorption}

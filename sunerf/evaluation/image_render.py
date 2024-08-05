@@ -35,7 +35,7 @@ class ImageRender:
         # Path to save rendered images 
         self.render_path = render_path
 
-    def frame_to_jpeg(self, i, observer_name, images, wavelengths, vmin=None, vmax=None, overwrite=True):
+    def frame_to_jpeg(self, filename, observer_name, images, wavelengths, vmin=None, vmax=None, overwrite=True):
         r""" Method that saves an image from a viewpoint as the ith frame as jpg file
 
         Parameters
@@ -65,7 +65,7 @@ class ImageRender:
             # Create output directory if it doesn't exist
             os.makedirs(output_path, exist_ok=True)
             # Save image as jpg
-            img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
+            img_path = f'{output_path}/{filename}.jpg'
 
             # Get the image
             image = images[:, :, n]
@@ -90,7 +90,7 @@ class ImageRender:
                 print(f"File exists in image path: {img_path} and overwrite is set to False. Skipping...")
             plt.close('all')
 
-    def frame_to_fits(self, i, observer_name, observer_file, images, wavelengths, resolution, overwrite=False):
+    def frame_to_fits(self, filename, observer_name, observer_file, images, wavelengths, resolution, overwrite=False):
         r"""Method that saves an image from a viewpoint as the ith frame as fits file
 
         Parameters
@@ -129,10 +129,7 @@ class ImageRender:
             # Create output directory if it doesn't exist
             output_path = f"{self.render_path}/{observer_name}/{wavelength}/"
             os.makedirs(output_path, exist_ok=True)
-            
-            file_name = f'{observer_name}_{i}'
-            # [render_path]/[instrument]/[wl]/[fits file] 
-            img_path = f'{output_path}{file_name}.fits'
+            img_path = f'{output_path}/{filename}.fits'
             
             # Verify if files exists and whether to overwrite.
             if (not os.path.exists(img_path) or overwrite) or (os.path.exists(img_path) and overwrite):
@@ -236,8 +233,6 @@ if __name__ == '__main__':
     
     # Initialization of the density and temperature model (Simple star analytical model or MHD model)
     if model == 'SimpleStar':
-        # Path to MHD data
-        data_path = None
         # Dummy timesteps
         t_i = 0
         t_f = 1
@@ -245,6 +240,7 @@ if __name__ == '__main__':
         dt = 1.0
         # Model
         model = SimpleStar
+        model_config = {}
     elif model == 'MHDModel':
         # Path to MHD data
         data_path = '/mnt/disks/data/MHD'
@@ -258,6 +254,7 @@ if __name__ == '__main__':
         dt = 3600.0
         # Model
         model = MHDModel
+        model_config = {'data_path': data_path}
     else:
         raise ValueError('Model not implemented')
 
@@ -267,8 +264,8 @@ if __name__ == '__main__':
     # Iterate over the unpacked point coordinates and render images
     # Loop over observers
     for j, files in enumerate(observer_files):
-        rendering = DensityTemperatureRadiativeTransfer(wavelengths=observer_wl[j], Rs_per_ds=1, model=model,
-                                                        model_config={'data_path': data_path})
+        rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
+                                                        model_config=model_config)
         loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
         render = ImageRender(render_path)
         resolution = (observer_res[j], observer_res[j])*u.pix
@@ -278,12 +275,12 @@ if __name__ == '__main__':
             t = ((datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
                   s_map_t).total_seconds()+t_shift*dt)/((t_f-t_i)*dt)
             # Outputs
-            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, distance=d*u.AU,
+            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=np.array(observer_wl[j]), distance=d*u.AU,
                                                    batch_size=batch_size, resolution=resolution)
 
             # Save as fits
             if 'fits' in render_format:
-                render.frame_to_fits(i, observer_names[j], files[i], outputs['image'], observer_wl[j], resolution,
+                render.frame_to_fits(time, observer_names[j], files[i], outputs['image'], observer_wl[j], resolution,
                                      overwrite=overwrite)
 
             # Save as jpeg
@@ -292,7 +289,7 @@ if __name__ == '__main__':
                 if j == 0 and i == 0:
                     image_min = np.percentile(outputs['image'], 1, axis=(0, 1))
                     image_max = np.percentile(outputs['image'], 99, axis=(0, 1))
-                render.frame_to_jpeg(i, observer_names[j], outputs['image'], observer_wl[j], vmin=image_min,
+                render.frame_to_jpeg(time, observer_names[j], outputs['image'], observer_wl[j], vmin=image_min,
                                      vmax=image_max)
 
             # Clear outputs

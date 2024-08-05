@@ -1,6 +1,6 @@
 import argparse
 import os
-
+from torch import nn
 import torch
 import yaml
 from pytorch_lightning import Trainer
@@ -9,7 +9,9 @@ from pytorch_lightning.loggers import WandbLogger
 import dateutil as dt
 from sunerf.data.loader.multi_thermal import MultiThermalDataModule
 from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
-from sunerf.train.callback import TestImageCallback
+from sunerf.train.callback import TestMultiThermalImageCallback
+from sunerf.model.model import NeRF_DT
+
 
 # Main function that sets up and runs the training process
 if __name__ == '__main__':
@@ -50,8 +52,11 @@ if __name__ == '__main__':
     data_module = MultiThermalDataModule(**data_config, working_dir=working_dir)
 
     # initialize SuNeRF model
+    
+    loss = nn.MSELoss()
+    model = NeRF_DT
     sunerf = DensityTemperatureSuNeRFModule(Rs_per_ds=data_module.Rs_per_ds, seconds_per_dt=data_module.seconds_per_dt,
-                                            image_scaling_config=image_scaling_config,
+                                            image_scaling_config=image_scaling_config, model=model, loss=loss,
                                             validation_dataset_mapping=data_module.validation_dataset_mapping,
                                             **model_config)
 
@@ -62,9 +67,9 @@ if __name__ == '__main__':
     save_path = os.path.join(path_to_save, 'save_state.snf')
     save_callback = LambdaCallback(on_validation_end=lambda *args: save_state(sunerf, data_module, save_path))
 
-    test_image_callback = TestImageCallback(data_module.validation_dataset_mapping[0],
+    test_image_callback = TestMultiThermalImageCallback(data_module.validation_dataset_mapping[0],
                                             data_module.config['resolution'],
-                                            cmap=data_module.config['cmap'])
+                                            data_module.config['wavelengths'])
     callbacks = [checkpoint_callback, save_callback, test_image_callback]
 
     N_GPUS = torch.cuda.device_count()
