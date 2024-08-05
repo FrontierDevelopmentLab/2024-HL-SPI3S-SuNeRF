@@ -145,9 +145,14 @@ class NeRF_DT(NeRF):
             n_layers: int = 8,
             d_filter: int = 512,
             skip: Tuple[int] = (),
-            encoding='positional'
+            encoding='positional', 
+            base_log_temperature: float = 5.0,
+            base_log_density: float = 10.0,
     ):
         super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
+
+        self.base_log_temperature = base_log_temperature
+        self.base_log_density = base_log_density
 
         self.log_absortpion = nn.ParameterDict([
                                 ['94',  torch.tensor(20.4, dtype=torch.float32)],
@@ -173,6 +178,11 @@ class NeRF_DT(NeRF):
             # if i in self.skip:
             #     x = torch.cat([x, x_input], dim=-1)
         x = self.out_layer(x)
+
+        # Add base density
+        x[:, 0] = x[:, 0] + self.base_log_density
+        # Add base temperature
+        x[:, 1] = x[:, 1] + self.base_log_temperature
 
         return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
 

@@ -175,7 +175,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # Flatten the query points
         flat_query_points = query_points.view(-1, 4)
         # Get the model output at the query points
-        state = model(flat_query_points)
+        state = model.forward(flat_query_points)
 
         # Save the model output and parameters in the state dictionary
         state['inferences'] = state['inferences'].reshape(*query_points_shape, state['inferences'].shape[-1])

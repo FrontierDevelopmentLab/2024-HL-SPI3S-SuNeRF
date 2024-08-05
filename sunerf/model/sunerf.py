@@ -152,7 +152,7 @@ class EmissionSuNeRFModule(BaseSuNeRFModule):
 class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
     def __init__(self, Rs_per_ds, seconds_per_dt, image_scaling_config, model, loss=nn.MSELoss(), 
                  lambda_image=1.0, lambda_regularization=1.0,
-                 sampling_config=None, hierarchical_sampling_config=None,
+                 sampling_config=None, hierarchical_sampling_config=None, pixel_intensity_factor=1e17,
                  model_config=None, **kwargs):
 
         self.lambda_image = lambda_image
@@ -162,7 +162,8 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
         rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=Rs_per_ds,
                                                         sampling_config=sampling_config,
                                                         hierarchical_sampling_config=hierarchical_sampling_config,
-                                                        model_config=model_config, model=model)
+                                                        model_config=model_config, model=model, 
+                                                        pixel_intensity_factor=pixel_intensity_factor)
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
@@ -174,7 +175,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
             'target_image'], batch['tracing']['wavelength']
         rays_o, rays_d = rays[:, 0], rays[:, 1]
         # Run one iteration of TinyNeRF and get the rendered filtergrams.
-        outputs = self.rendering(rays_o, rays_d, time, wavelengths)
+        outputs = self.rendering.forward(rays_o, rays_d, time, wavelengths)
 
         # Check for any numerical issues.
         for k, v in outputs.items():
