@@ -51,7 +51,7 @@ lon = sdo_map.carrington_longitude.value + 60
 ####################### PLOT SuNeRF #######################
 lats = np.linspace(0, -90, 4).astype(int)
 for lat in tqdm(lats, desc='Plot Latitudes'):
-    outputs = loader.load_observer_image(lat, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+    outputs = loader.render_observer_image(lat, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     channel_mpb = ax.imshow(sdo_norms[193].inverse(outputs['channel_map']), cmap=cmap, norm=sdo_norms[193],
                             origin='lower')
@@ -83,7 +83,7 @@ for lat in tqdm(lats, desc='Ensemble'):
     ensemble_maps = []
     for chk in ensemble_chks:
         loader = SuNeRFLoader(chk, resolution=W, focal=focal)
-        outputs = loader.load_observer_image(lat, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+        outputs = loader.render_observer_image(lat, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
         ensemble_maps += [outputs['channel_map']]
     uncertainty_imgs += [np.std(ensemble_maps, 0) * 100]
 
@@ -108,7 +108,7 @@ plt.close()
 # 193
 loader_193 = SuNeRFLoader(chk_path, resolution=W, focal=focal)
 cmap = sdo_cmaps[loader_193.wavelength]
-outputs_193 = loader_193.load_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+outputs_193 = loader_193.render_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
 plt.imsave(os.path.join(video_path, f'sunerf_193.jpg'), outputs_193['channel_map'], cmap=cmap, vmin=0, vmax=1,
            origin='lower')
 del loader_193
@@ -116,7 +116,7 @@ del loader_193
 # 304
 loader_304 = SuNeRFLoader('/mnt/nerf-data/transfer_runs/304/save_state.snf', resolution=W, focal=focal)
 cmap = sdo_cmaps[loader_304.wavelength]
-outputs_304 = loader_304.load_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+outputs_304 = loader_304.render_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
 plt.imsave(os.path.join(video_path, f'sunerf_304.jpg'), outputs_304['channel_map'], cmap=cmap, vmin=0, vmax=.7,
            origin='lower')
 del loader_304
@@ -124,7 +124,7 @@ del loader_304
 # 171
 loader_171 = SuNeRFLoader('/mnt/nerf-data/transfer_runs/171/save_state.snf', resolution=W, focal=focal)
 cmap = sdo_cmaps[loader_171.wavelength]
-outputs_171 = loader_171.load_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+outputs_171 = loader_171.render_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
 plt.imsave(os.path.join(video_path, f'sunerf_171.jpg'), outputs_171['channel_map'], cmap=cmap, vmin=0, vmax=1,
            origin='lower')
 del loader_171
@@ -132,7 +132,7 @@ del loader_171
 # 211
 loader_211 = SuNeRFLoader('/mnt/nerf-data/transfer_runs/211/save_state.snf', resolution=W, focal=focal)
 cmap = sdo_cmaps[loader_211.wavelength]
-outputs_211 = loader_211.load_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+outputs_211 = loader_211.render_observer_image(-90, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
 plt.imsave(os.path.join(video_path, f'sunerf_211.jpg'), outputs_211['channel_map'], cmap=cmap, vmin=0, vmax=1,
            origin='lower')
 del loader_211

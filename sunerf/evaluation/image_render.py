@@ -1,175 +1,297 @@
 import argparse
 import os
 from datetime import datetime
-
 from astropy import units as u
-from astropy.coordinates import SkyCoord
 import matplotlib.pyplot as plt
 import numpy as np
 import sunpy.visualization.colormaps as cm
-from sunpy.map import Map, make_fitswcs_header
+from sunpy.map import Map
+from sunpy.map.header_helper import get_observer_meta
 from tqdm import tqdm
+# For density and temperature rendering
 from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
+import glob
+import yaml
+
 
 class ImageRender:
-    r"""Class to store poses, render images, and save video
+    """ Class that renders images from a given model output
     """
     def __init__(self, render_path):
-        r"""
-        Arguments
-        ----------
-        main_args : string
-            path to hyperperams.yaml file with training configuration
-        video_args : string
-            path to hyperperams.yaml file with training configuration
         """
+
+        Parameters
+        ----------
+        render_path : str
+            Path to save rendered images
+
+        Returns
+        -------
+        None
+        """
+        # Path to save rendered images 
         self.render_path = render_path
 
-    def save_frame_as_jpg(self, i, model_output, wavelength, itype='imager'):
-        r"""Method that saves an image from a viewpoint as the ith frame
-        Args
-        ------
+    def frame_to_jpeg(self, filename, observer_name, images, wavelengths, vmin=None, vmax=None, overwrite=True):
+        r""" Method that saves an image from a viewpoint as the ith frame as jpg file
+
+        Parameters
+        ----------
         i : int
             frame number
-        point : np.array
-            lat,lon coordinate of viewpoint
-        wavelength : int
-            wavelength of image to render
+        observer_name : str
+            name of the observer
+        images : numpy array
+            model output image
+        wavelengths : list
+
+        Returns
+        -------
+        None
         """
 
-        # Only do image if it doesn't exist
-        output_path =  f"{self.render_path}/{itype}/{wavelength}"
-        os.makedirs(output_path, exist_ok=True)
-        img_path = f'{output_path}/{str(i).zfill(3)}.jpg'
-
-        if not os.path.exists(img_path):
-            image = model_output/np.nanmean(model_output)
-            cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
-            plt.imsave(img_path, image, cmap=cmap, vmin=0, vmax=np.nanmax(image))
-
-
-    def save_frame_as_fits(self, i, point, model_output, wavelength, half_fov=1.3, itype='imager', obs_date='2014-04-01T00:00:00.000'):
-        r"""Method that saves an image from a viewpoint as the ith frame as fits file
-        Args
-        ------
-        i : int
-            frame number
-        point : np.array
-            lat,lon coordinate of viewpoint
-        half_fov : float
-            half size field of view in solar radii 
-        """
-
-        lat, lon, d, time = point
-
-        # save result image
-        output_path =  f"{self.render_path}/{itype}/{wavelength}"
-        os.makedirs(output_path, exist_ok=True)
-        img_path = f'{output_path}/{str(i).zfill(3)}_w{wavelength}_lat{np.round(lat,1)}_lon{np.round(lon,1)}_r{np.round(d,2)}_T{(time.strftime("%Y%m%d-%H%M"))}.fits'
-
-        if not os.path.exists(img_path):
-
-
-            # Create new header
-            new_observer = SkyCoord(-lon*u.deg, lat*u.deg, d*u.AU, obstime=obs_date, frame='heliographic_stonyhurst')
-
-            out_shape = model_output.shape
-            out_ref_coord = SkyCoord(0*u.arcsec, 0*u.arcsec, obstime=new_observer.obstime,
-                                    frame='helioprojective', observer=new_observer,
-                                    rsun=696000*u.km)
-
-            scale = 360/np.pi*np.tan(((half_fov*u.solRad*d)/(1 * u.AU).to(u.solRad)).value)/out_shape[0] * u.deg
-            scale = scale.to(u.arcsec)/u.pix
-
-            out_header = make_fitswcs_header(
-                out_shape,
-                out_ref_coord,
-                scale=u.Quantity([scale, scale]),
-                rotation_matrix=np.array([[1,0],[0,1]]),
-                instrument='SPI3S',
-                wavelength=wavelength*u.Angstrom
-            )
-
-            # Add sun radii information
-            out_header['r_sun'] = out_shape[0]/2/half_fov
-
-            # create dummy sunpy map
-            s_map = Map(model_output, out_header)
-            s_map.save(img_path, overwrite=True)
-
-
-def parse_args():
-    # Commands 
-    p = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument('--render_path', type=str)
-    p.add_argument('--resolution', type=int, default=512)
-    p.add_argument('--batch_size', type=int, default=4096)
-    p.add_argument('--output_format', type=str, default='jpg')
-    p.add_argument(
-        "--wavelengths",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Wavelengths to render",
-    )    
-
-    args = p.parse_args()
-    return args
-
-if __name__ == '__main__':
-    path_to_aia_file = "/mnt/disks/data/AIA/171/*.fits"
-    s_map = Map(path_to_aia_file)
-
-    args = parse_args()
-    render_path = args.render_path
-    resolution = args.resolution
-    resolution = (resolution, resolution) * u.pix
-    batch_size = args.batch_size
-    output_format = args.output_format
-    wavelengths = args.wavelengths # TODO: change to instrument specific and multi-wavelength 
-
-    # initialization of density and temperature with simple star
-    # rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=SimpleStar, model_config=None) #TODO: explic. define star properties
-    rendering = DensityTemperatureRadiativeTransfer(wavelengths = wavelengths, Rs_per_ds=1, model=MHDModel, model_config={'data_path': '/mnt/disks/data/MHD'})
-    loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
-    render = ImageRender(render_path)
-    avg_time = datetime.strptime(s_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-
-    os.makedirs(render_path, exist_ok=True)
-
-    n_points = 60
-
-    points_1 = zip(np.linspace(-25, 25, n_points),
-                np.linspace(0, 45, n_points),
-                np.linspace(1.5, 0.8, n_points),
-                np.linspace(0, 1, n_points))
-
-    points_2 = zip(np.ones(n_points) * 0,
-                np.linspace(0, 360, n_points),
-                np.ones(n_points),
-                [avg_time] * n_points)
-
-    points_3 = zip(np.linspace(-90, 90, n_points),
-                np.linspace(0, 360, n_points),
-                np.linspace(1, 0.2, n_points),
-                [avg_time] * n_points )
-
-    # combine coordinates
-    points = list(points_1) #+ list(points_2) + list(points_3)
-
-    for i, (lat, lon, d, time) in tqdm(list(enumerate(points)), total=len(points)):
-        outputs = loader.load_observer_image(lat * u.deg, lon * u.deg, time, distance=d * u.AU, batch_size=batch_size, resolution=resolution)
+        # Get the min and max values for the colormap
+        if vmin is None:
+            vmin = np.percentile(images, 1, axis=(0,1))
+        if vmax is None:
+            vmax = np.percentile(images, 99, axis=(0,1))
 
         for n, wavelength in enumerate(wavelengths):
-            if output_format == 'jpg':
-                render.save_frame_as_jpg(i, outputs['image'][:,:,n], wavelength)
+            # Only save image if it doesn't exist
+            output_path = f"{self.render_path}/{observer_name}/{wavelength}"
+            # Create output directory if it doesn't exist
+            os.makedirs(output_path, exist_ok=True)
+            # Save image as jpg
+            img_path = f'{output_path}/{filename}.jpg'
 
-            elif output_format == 'fits':
-                # i, point, model_output, wavelength,
-                render.save_frame_as_fits(i, (lat, lon, d, time), outputs['image'][:,:,n], wavelength, obs_date=avg_time)
+            # Get the image
+            image = images[:, :, n]
+            # Get the colormap
+            cmap = plt.get_cmap(f'sdoaia{wavelength}').copy()
+
+            # Draw the image
+            fig_sizex = 4
+            fig_sizey = 4
+            fig = plt.figure(figsize=(fig_sizex, fig_sizey), constrained_layout=False)
+            spec = fig.add_gridspec(nrows=1, ncols=1, left=0.00, right=1.00, bottom=0.00, top=1.00, wspace=0.00) 
+            ax = fig.add_subplot(spec[:, :])
+            ax.imshow(image, cmap=cmap, norm='log', vmin=vmin[n], vmax=vmax[n])
+            ax.set_axis_off()
+            plt.draw()
+            
+            # Verify if files exists and whether to overwrite.
+            if (not os.path.exists(img_path) or overwrite) or (os.path.exists(img_path) and overwrite):
+                plt.savefig(img_path, format='jpeg', dpi=300)
+            # If file exists AND overwrite is false
             else:
-                print('No valid format selected')
+                print(f"File exists in image path: {img_path} and overwrite is set to False. Skipping...")
+            plt.close('all')
+
+    def frame_to_fits(self, filename, observer_name, observer_file, images, wavelengths, resolution, overwrite=False):
+        r"""Method that saves an image from a viewpoint as the ith frame as fits file
+
+        Parameters
+        ----------
+        i : int
+            frame number
+        observer_name : str
+            name of the observer
+        observer_file : str
+            path to observer file
+        images : numpy array
+            model output image
+        wavelengths : list
+            wavelengths to render
+        resolution : int
+            resolution of the images
+        overwrite : bool
+            whether to overwrite existing files
+
+        Returns
+        -------
+        None
+        """
+        
+        s_map = Map(observer_file)   
+        # modify header meta to get proper resolution and wavelength
+        s_map = s_map.resample(resolution)
+        
+        for n, wavelength in enumerate(wavelengths):
+        
+            s_map.meta["WAVELNTH"] = wavelength 
+
+            # overwrite with model data for each wavelength
+            new_s_map = Map(images[:, :, n], s_map.meta)
+            
+            # Create output directory if it doesn't exist
+            output_path = f"{self.render_path}/{observer_name}/{wavelength}/"
+            os.makedirs(output_path, exist_ok=True)
+            img_path = f'{output_path}/{filename}.fits'
+            
+            # Verify if files exists and whether to overwrite.
+            if (not os.path.exists(img_path) or overwrite) or (os.path.exists(img_path) and overwrite):
+                new_s_map.save(img_path, overwrite=True)
+            # If file exists AND overwrite is false
+            else:
+                print(f"File exists in image path: {img_path} and overwrite is set to False. Skipping...")
+            # Close maps
+            new_s_map = None
+
+        # Close maps
+        s_map = None
+
+
+def load_observer_meta(path_to_file):
+    """ Main function to load observer data
+    
+    Parameters
+    ----------
+    path_to_file : str
+        Path to AIA files
+
+    Returns
+    --------
+    lat : float
+        Latitude of the observer
+    lon : float
+        Longitude of the observer
+    dist : float
+        Distance of the observer from the Sun
+    time : str
+        Time of the observation
+    """
+    # Read AIA image 
+    s_map = Map(path_to_file)
+    # Extract observation time and satellite position when AIA produced image
+    sat_coords = s_map.observer_coordinate 
+    coord_meta = get_observer_meta(sat_coords)
+    lat = coord_meta['hglt_obs']  # latitude [degree]
+    lon = coord_meta['hgln_obs']  # longitude [degree]
+    dist = coord_meta['dsun_obs']  # instrument distance in units [m]
+    # Convert into expected units/coordinate system for the render
+    dist = dist*u.m.to(u.au)  # conversion to [AU] with astropy
+    # Extract observation time -- first condition for SDO (t_obs), second condition for STEREO (date-obs)
+    time = s_map.meta['t_obs'] if ('t_obs' in s_map.meta) else s_map.meta['date-obs']
+
+    return lat, lon, dist, time
+
+
+if __name__ == '__main__':
+    """ Main function to render images from a given model output
+    
+    Parameters
+    ----------
+    path_to_aia_file : str
+        Path to AIA files
+    render_path : str
+        Path to save rendered images
+    resolution : int
+        Resolution of the images
+    batch_size : int
+        Batch size for rendering
+    output_format : str
+        Output format of the images
+    wavelengths : list
+        Wavelengths to render
+        
+    Returns
+    -------
+    Imager renders.
+    """
+
+    # Parse command line arguments
+    p = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument('--config', type=str)
+    args = p.parse_args()
+
+    # Load configuration
+    config = yaml.load(open(args.config, 'r'), Loader=yaml.FullLoader)
+    render_path = config['render_path']
+    render_format = config['render_format']
+    overwrite = config['overwrite']
+    observer_names = config['observer_names']
+    observer_dir = config['observer_dir']
+    observer_wl = config['observer_wl']
+    observer_res = config['observer_res']
+    observer_ref = config['observer_ref']
+    batch_size = config['batch_size']
+    model = config['model']
+    
+    # Find files and metadata for each observer
+    observer_files = [sorted(glob.glob(f"{dir}/*.fits")) for dir in observer_dir]
+    observer_meta = [[load_observer_meta(filepath) for filepath in tqdm(files)] for files in observer_files]
+   
+    # Reference map for module from the first file
+    s_map = Map(observer_ref)
+    # Extracting reference time from the map's observation time
+    s_map_t = datetime.strptime(s_map.meta['t_obs'] if ('t_obs' in s_map.meta) else s_map.meta['date-obs'],
+                                '%Y-%m-%dT%H:%M:%S.%f')
+    
+    # Initialization of the density and temperature model (Simple star analytical model or MHD model)
+    if model == 'SimpleStar':
+        # Dummy timesteps
+        t_i = 0
+        t_f = 1
+        t_shift = 0
+        dt = 1.0
+        # Model
+        model = SimpleStar
+        model_config = {}
+    elif model == 'MHDModel':
+        # Path to MHD data
+        data_path = '/mnt/disks/data/MHD'
+        # List of all density files
+        density_files = sorted(glob.glob(os.path.join(data_path, 'rho', '*.h5')))
+        # Identify timesteps for first and last file
+        t_i = int(density_files[0].split('00')[1].split('.h5')[0])
+        t_f = int(density_files[-1].split('00')[1].split('.h5')[0])
+        t_shift = 0
+        # Timestep = 1 hour
+        dt = 3600.0
+        # Model
+        model = MHDModel
+        model_config = {'data_path': data_path}
+    else:
+        raise ValueError('Model not implemented')
+
+    # Create render path directory if it doesn't exist.
+    os.makedirs(render_path, exist_ok=True)
+
+    # Iterate over the unpacked point coordinates and render images
+    # Loop over observers
+    for j, files in enumerate(observer_files):
+        rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
+                                                        model_config=model_config)
+        loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+        render = ImageRender(render_path)
+        resolution = (observer_res[j], observer_res[j])*u.pix
+        # Loop over observer files
+        for i, (lat, lon, d, time) in tqdm(enumerate(observer_meta[j]), total=len(observer_meta[j])):
+            # Convert time to seconds (fractional) 0 to 1 value that is expected by MHD
+            t = ((datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
+                  s_map_t).total_seconds()+t_shift*dt)/((t_f-t_i)*dt)
+            # Outputs
+            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=np.array(observer_wl[j]), distance=d*u.AU,
+                                                   batch_size=batch_size, resolution=resolution)
+
+            # Save as fits
+            if 'fits' in render_format:
+                render.frame_to_fits(time, observer_names[j], files[i], outputs['image'], observer_wl[j], resolution,
+                                     overwrite=overwrite)
+
+            # Save as jpeg
+            if 'jpeg' in render_format:
+                # Save stats from first image
+                if j == 0 and i == 0:
+                    image_min = np.percentile(outputs['image'], 1, axis=(0, 1))
+                    image_max = np.percentile(outputs['image'], 99, axis=(0, 1))
+                render.frame_to_jpeg(time, observer_names[j], outputs['image'], observer_wl[j], vmin=image_min,
+                                     vmax=image_max)
+
+            # Clear outputs
+            outputs = None
+                    

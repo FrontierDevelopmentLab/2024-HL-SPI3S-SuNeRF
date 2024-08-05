@@ -39,7 +39,7 @@ norm = psi_norms[loader.wavelength]
 
 for i, f in enumerate(tqdm(files)):
     s_map = Map(f)
-    outputs = loader.load_observer_image(s_map.carrington_latitude.value, -s_map.carrington_longitude.value,
+    outputs = loader.render_observer_image(s_map.carrington_latitude.value, -s_map.carrington_longitude.value,
                                          s_map.date.to_datetime(),
                                          distance=s_map.dsun.to(u.solRad).value, batch_size=4096 * n_gpus, strides=1)
     pred = outputs['channel_map']

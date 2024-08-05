@@ -113,7 +113,7 @@ def _create_header(time):
 result_path = '/mnt/results/evaluation_eruption/video_2'
 os.makedirs(result_path, exist_ok=True)
 for time in tqdm(pd.date_range(datetime(2012, 8, 31, 19), datetime(2012, 8, 31, 23), 100)):
-    outputs = loader.load_observer_image(sdo_map.carrington_latitude.value, -sdo_map.carrington_longitude.value,
+    outputs = loader.render_observer_image(sdo_map.carrington_latitude.value, -sdo_map.carrington_longitude.value,
                                          time.to_pydatetime(),
                                          distance=distance, batch_size=4096, strides=2, center=center)
     _plot(time, outputs)

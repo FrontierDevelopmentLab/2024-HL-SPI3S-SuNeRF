@@ -44,7 +44,7 @@ gt_imgs, pred_imgs, diff_imgs, uncertainty_imgs, reprojected_imgs = [], [], [], 
 
 for f in tqdm(plot_files, desc='Load plot images'):
     s_map = Map(f)
-    predictions = [loader.load_observer_image(s_map.carrington_latitude.value, -s_map.carrington_longitude.value,
+    predictions = [loader.render_observer_image(s_map.carrington_latitude.value, -s_map.carrington_longitude.value,
                                               s_map.date.to_datetime(),
                                               distance=s_map.dsun.to(u.solRad).value, batch_size=4096 * n_gpus,
                                               strides=1)['channel_map']

@@ -1,23 +1,26 @@
 import torch
 from torch import nn
-
+import datetime
 from sunerf.model.model import NeRF
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler
 
 class SuNeRFRendering(nn.Module):
 
+    
+    
     def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, model_config=None): # TODO: adopt do be used for different models
         super().__init__()
         self.Rs_per_ds = Rs_per_ds
+        # Rs_per_ds --> Solar Radii per distance
 
-        # set default configurations
+        # set default configurations if none provided
         hierarchical_sampling_config = {'type': 'hierarchical'} \
             if hierarchical_sampling_config is None else hierarchical_sampling_config
         sampling_config = {'type': 'stratified'} if sampling_config is None else sampling_config
         model_config = {} if model_config is None else model_config
 
-        # setup sampling strategy
+        # setup sampling strategy based on configuration
         sampling_type = sampling_config.pop('type')
         if sampling_type == 'spherical':
             self.sampler = SphericalSampler(Rs_per_ds=Rs_per_ds, **sampling_config)
@@ -26,18 +29,18 @@ class SuNeRFRendering(nn.Module):
         else:
             raise ValueError(f'Unknown sampling type {sampling_type}')
 
-        # setup hierarchical sampling
+        # setup hierarchical sampling method
         hierarchical_sampling_type = hierarchical_sampling_config.pop('type')
         if hierarchical_sampling_type == 'hierarchical':
             self.sampler_hierarchical = HierarchicalSampler(**hierarchical_sampling_config)
         else:
             raise ValueError(f'Unknown sampling type {hierarchical_sampling_type}')
 
-        # setup models
+        # setup coarse and fine models
         self.coarse_model = model(**model_config)
         self.fine_model = model(**model_config)
 
-    def forward(self, rays_o, rays_d, times):
+    def forward(self, rays_o, rays_d, times, wavelengths=None):
         r"""_summary_
         		Compute forward pass through model.
 
@@ -49,17 +52,20 @@ class SuNeRFRendering(nn.Module):
         			outputs: Synthesized filtergrams/images.
         		"""
 
-        # Sample query points along each ray.
+        # Sample query points along each ray using defined sampling method
         sampling_out = self.sampler(rays_o, rays_d)
         query_points, z_vals = sampling_out['points'], sampling_out['z_vals']
+        # z_vals --> Distance along the ray
 
         # add time to query points
         exp_times = times[:, None].repeat(1, query_points.shape[1], 1)
         query_points_time = torch.cat([query_points, exp_times], -1)  # --> (x, y, z, t)
 
-        # Coarse model pass.
-        coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals)
-
+        # Coarse model pass. (Density and temperature at each sample points along the ray)
+        if wavelengths is None:
+            coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals)
+        else:
+            coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths)
         outputs = {'z_vals_stratified': z_vals, 'coarse_image': coarse_out['image']}
 
         # Fine model pass.
@@ -69,11 +75,15 @@ class SuNeRFRendering(nn.Module):
                                                      hierarchical_out['z_vals'],
                                                      hierarchical_out['new_z_samples'])
 
+
         # add time to query points = expand to dimensions of query points and slice one dimension
         exp_times = times[:, None].repeat(1, query_points.shape[1], 1)
         query_points_time = torch.cat([query_points, exp_times], -1)
 
-        fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined)
+        if wavelengths is None:
+            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined)
+        else:
+            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths)
 
         # Store outputs.
         outputs['z_vals_hierarchical'] = z_hierarch
@@ -104,8 +114,11 @@ class SuNeRFRendering(nn.Module):
 
     def _render(self, model, query_points, rays_d, rays_o, z_vals):
         query_points_shape = query_points.shape[:-1]
+        # Flattten query points for model input
         flat_query_points = query_points.view(-1, 4)
+        # pass through the  model 
         raw = model(flat_query_points)
+        # reshape 
         raw = raw.reshape(*query_points_shape, raw.shape[-1])
         # Perform differentiable volume rendering to re-synthesize the filtergrams.
         state = {'raw': raw, 'z_vals': z_vals, 'rays_d': rays_d, 'rays_o': rays_o, 'query_points': query_points}

@@ -57,6 +57,37 @@ class TestImageCallback(BaseCallback):
 
         wandb.log({'validation.loss': val_loss, 'validation.ssim': val_ssim, 'validation.psnr': val_psnr})
 
+class TestMultiThermalImageCallback(BaseCallback):
+
+    def __init__(self, name, image_shape, wavelengths):
+        super().__init__(name)
+        self.image_shape = image_shape
+        self.wavelengths = wavelengths
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+
+        outputs = self.get_validation_outputs(pl_module)
+        if outputs is None:
+            return
+
+        # reshape
+        outputs = {k: v.view(*self.image_shape, *v.shape[1:]).cpu().numpy() for k, v in outputs.items()}
+
+        fine_image = outputs['fine_image']
+        target_image = outputs['target_image']
+        coarse_image = outputs['coarse_image']
+
+        plot_samples_multithermal(fine_image, coarse_image, outputs['height_map'], 
+                     target_image, outputs['z_vals_stratified'], outputs['z_vals_hierarchical'], self.wavelengths,
+                     outputs['distance'].mean())
+
+        val_loss = ((fine_image - target_image) ** 2).mean()
+        val_ssim = structural_similarity(target_image[..., 0], fine_image[..., 0], data_range=1)
+        val_psnr = -10. * np.log10(val_loss)
+
+        wandb.log({'validation.loss': val_loss, 'validation.ssim': val_ssim, 'validation.psnr': val_psnr})
+        
+
 
 def plot_samples(fine_image, coarse_image, height_map, absorption_map, target_image, z_vals_stratified,
                  z_vals_hierach, distance, cmap):
@@ -83,8 +114,70 @@ def plot_samples(fine_image, coarse_image, height_map, absorption_map, target_im
     wandb.log({"Comparison": fig})
     plt.close('all')
 
+def plot_samples_multithermal(fine_image, coarse_image, height_map,
+                 target_image,
+                 z_vals_stratified,
+                 z_vals_hierach,
+                 wavelengths,
+                 distance
+                 ):
+    # Log example images on wandb
+    # # Plot example outputs
 
-def log_overview(images, poses, times, cmap, seconds_per_dt, ref_time):
+    # Remove missing wavelengths
+    fine_image = fine_image[:,:,wavelengths>0]
+    coarse_image = coarse_image[:,:,wavelengths>0]
+    target_image = target_image[:,:,wavelengths>0]
+
+    wavelengths = wavelengths[wavelengths>0]
+
+    n_channels = wavelengths.shape[0]
+
+    fig = plt.figure(figsize=2*np.array([n_channels+1, 3]), dpi=500)
+    gs0 = fig.add_gridspec(3, n_channels+1, wspace=0, hspace=0, left=0, right=1, bottom=0, top=1)
+
+    for i in np.arange(0,n_channels):
+        normalize = ImageNormalize(vmin=np.min(target_image[..., i]), vmax=np.max(target_image[..., i]), stretch=AsinhStretch(0.005), clip=True)
+        cmap = plt.get_cmap(f'sdoaia{int(wavelengths[i])}').copy()
+        ax = fig.add_subplot(gs0[0, i])
+        # ax.imshow(testimg[..., i], cmap=cmap, norm=sdo_img_norm)
+        ax.imshow(normalize(target_image[..., i]), cmap=cmap, norm=sdo_img_norm)
+        if i==0:
+            ax.set_ylabel(f'Target')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        ax = fig.add_subplot(gs0[1, i])
+        ax.imshow(normalize(fine_image[..., i]), cmap=cmap, norm=sdo_img_norm)
+        if i==0:
+            ax.set_ylabel(f'Prediction')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        ax = fig.add_subplot(gs0[2, i])
+        ax.imshow(normalize(coarse_image[..., i]), cmap=cmap, norm=sdo_img_norm)
+        if i==0:
+            ax.set_ylabel(f'Coarse')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+
+    ax = fig.add_subplot(gs0[0, n_channels])
+    ax.imshow(height_map, cmap='plasma', vmin=1, vmax=1.5)
+    ax.set_ylabel(f'Emission Height')
+    ax.yaxis.set_label_position("right")
+    ax.set_axis_off()
+
+    ax = fig.add_subplot(gs0[1, n_channels])
+    # select index
+    y, x = z_vals_stratified.shape[0] // 4, z_vals_stratified.shape[1] // 4 # select point in first quadrant
+    plot_ray_sampling(z_vals_stratified[y, x] - distance, z_vals_hierach[y, x] - distance, ax)
+
+    wandb.log({"Comparison": fig})
+    plt.close('all')    
+
+
+def log_overview(images, poses, times, cmap, seconds_per_dt, ref_time, wavelengths=None):
     dirs = np.stack([np.sum([0, 0, -1] * pose[:3, :3], axis=-1) for pose in poses])
     origins = poses[:, :3, -1]
     colors = plt.get_cmap('viridis')(Normalize()(times))
@@ -129,7 +222,11 @@ def log_overview(images, poses, times, cmap, seconds_per_dt, ref_time):
 
         ax = plt.subplot(122)
         # plot corresponding image
-        ax.imshow(img, norm=norm, cmap=cmap)
+        if cmap is not None:
+            ax.imshow(img, norm=norm, cmap=cmap)
+        if wavelengths is not None:
+            cmap = plt.get_cmap(f'sdoaia{int(wavelengths[i])}').copy()
+            ax.imshow(img, norm=norm, cmap=cmap)
         ax.set_axis_off()
         ax.set_title('Time: %s' % unnormalize_datetime(times[i], seconds_per_dt, ref_time).isoformat(' '))
 

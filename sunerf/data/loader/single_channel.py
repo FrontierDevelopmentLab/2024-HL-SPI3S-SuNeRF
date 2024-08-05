@@ -7,7 +7,7 @@ from dateutil.parser import parse
 
 from sunerf.data.dataset import MmapDataset, ArrayDataset
 from sunerf.data.date_util import normalize_datetime
-from sunerf.data.loader.base_loader import BaseDataModule, get_data
+from sunerf.data.loader.base_loader import BaseDataModule
 from sunerf.train.callback import log_overview
 
 
@@ -17,7 +17,7 @@ class SingleChannelDataModule(BaseDataModule):
                  batch_size=int(2 ** 10), debug=False, cmap='gray', **kwargs):
         os.makedirs(working_dir, exist_ok=True)
 
-        data_dict = get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug)
+        data_dict = super().get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug)
 
         o_times = data_dict['time']
 

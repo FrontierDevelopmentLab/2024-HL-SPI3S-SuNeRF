@@ -75,7 +75,7 @@ time, d = solo_map.date.to_datetime(), solo_map.dsun.to(u.solRad).value
 lat, lon = solo_map.carrington_latitude.to(u.deg).value, solo_map.carrington_longitude.to(u.deg).value
 
 ####################### PLOT SuNeRF #######################
-outputs = loader.load_observer_image(lat, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
+outputs = loader.render_observer_image(lat, -lon, time, distance=d, batch_size=4096 * n_gpus, strides=1)
 
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 channel_mpb = ax.imshow(sdo_norms[304].inverse(outputs['channel_map']), norm=norm, cmap=cmap, origin='lower')

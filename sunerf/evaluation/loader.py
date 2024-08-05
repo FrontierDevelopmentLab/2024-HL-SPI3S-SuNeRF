@@ -7,7 +7,8 @@ from astropy import units as u
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
-
+import concurrent.futures
+# For date normalization utilities
 from sunerf.data.date_util import normalize_datetime, unnormalize_datetime
 from sunerf.data.ray_sampling import get_rays
 from sunerf.train.coordinate_transformation import pose_spherical
@@ -16,26 +17,37 @@ class SuNeRFLoader:
 
     def __init__(self, state_path, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
+        print(f"Loading model to device {device}")
         self.device = device
 
         state = torch.load(state_path)
         data_config = state['data_config']
+        # Store data configuration
         self.config = data_config
+        # Store wavelength
         self.wavelength = data_config['wavelength']
         self.times = data_config['times']
+        # Store World Coordinate System info
         self.wcs = data_config['wcs']
         self.resolution = data_config['resolution']
 
+        # get rendering model
         rendering = state['rendering']
+        # Parallelize and move to device
         self.rendering = nn.DataParallel(rendering).to(device)
         model = rendering.fine_model
         self.model = nn.DataParallel(model).to(device)
 
+        # Get seconds per delta time
         self.seconds_per_dt = state['seconds_per_dt']
+        # Get solar radii per data scale
         self.Rs_per_ds = state['Rs_per_ds']
+        # Convert to megameters per data scale
         self.Mm_per_ds = self.Rs_per_ds * (1 * u.R_sun).to_value(u.Mm)
+        # Get reference time
         self.ref_time = state['ref_time']
 
+        # Reference map
         ref_map = Map(np.zeros(self.resolution), self.wcs)
         self.ref_map = ref_map
 
@@ -47,20 +59,25 @@ class SuNeRFLoader:
     def end_time(self):
         return np.max(self.times)
 
+    # Disable gradient calculation
     @torch.no_grad()
-    def load_observer_image(self, lat: u, lon: u, time: datetime,
+    def render_observer_image(self, lat: u, lon: u, time: datetime,
                             distance = (1 * u.AU).to(u.solRad),
                             center: Tuple[float, float, float] = None, resolution=None,
-                            batch_size: int = 4096):
+                            batch_size: int = 128):
+                            #Original batch_size : 4096
+                            
         # convert to pose
-        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
+        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_vaslue(u.rad), distance.to_value(u.solRad), center).numpy()
         # load rays
         if resolution is not None:
+            # Resample map to desired resolution
             ref_map = self.ref_map.resample(resolution)
             img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
         else:
             img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
 
+        # get rays from coordinates and pose
         rays_o, rays_d = get_rays(img_coords, target_pose)
         rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
 
@@ -76,22 +93,29 @@ class SuNeRFLoader:
             torch.split(flat_time, batch_size)
 
         outputs = {}
+        # iterate over batches
+        # b = batches
         for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
             b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+            # iterate over outputs 
             for k, v in b_outs.items():
                 if k not in outputs:
+                    # initialise list if key is not in outputs
                     outputs[k] = []
                 outputs[k].append(v)
-
+        # concatenate and reshape outputs
         results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
         return results
 
+    # normalizing datetime
     def normalize_datetime(self, time):
         return normalize_datetime(time, self.seconds_per_dt, self.ref_time)
 
+    # whats the purpose of unnormalising datetime ?
     def unnormalize_datetime(self, time):
         return unnormalize_datetime(time, self.seconds_per_dt, self.ref_time)
 
+    # Disabling gradient calculation
     @torch.no_grad()
     def load_coords(self, query_points_npy, batch_size=2048):
         target_shape = query_points_npy.shape[:-1]
@@ -119,43 +143,100 @@ class ModelLoader(SuNeRFLoader):
         self.rendering = nn.DataParallel(rendering).to(device)
         self.model = nn.DataParallel(model).to(device)   
         self.seconds_per_dt = 1
-        self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+        self.ref_time = datetime.strptime(ref_map.meta['t_obs'] 
+                                          if ('t_obs' in ref_map.meta) else ref_map.meta['date-obs'], 
+                                          '%Y-%m-%dT%H:%M:%S.%f')
+
+    def process_batch(self, b_rays_o, b_rays_d, b_time, b_wl):
+        b_outs = self.rendering(b_rays_o, b_rays_d, b_time, b_wl)
+        return b_outs
+
+    def process_batch_with_index(self, index, b_rays_o, b_rays_d, b_time, b_wl):
+            result = self.process_batch(b_rays_o, b_rays_d, b_time, b_wl)
+            return index, result
+
 
     @torch.no_grad()
-    def load_observer_image(self, lat: u, lon: u, time: float,
-                            distance = (1 * u.AU).to(u.solRad),
+    def render_observer_image(self, lat: u, lon: u, time: float,
+                            distance=(1 * u.AU).to(u.solRad), wl: np.ndarray = None,
                             center: Tuple[float, float, float] = None, resolution=None,
                             batch_size: int = 4096):
-        # convert to pose
-        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
-        # load rays
+        """ Render observer image at a given time and location.
+
+        Parameters
+        ----------
+        lat : u
+            Latitude of the observer.
+        lon : u
+            Longitude of the observer.
+        time : float
+            Time of the observation.
+        distance : u
+            Distance of the observer from the Sun.
+        center : Tuple[float, float, float], optional
+            Center of the observer.
+        resolution : None, optional
+            Resolution of the image to render.
+        batch_size : int, optional
+            Batch size for rendering.
+        """
+
+        # Convert coordinates to pose
+        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad),
+                                     distance.to_value(u.solRad), center).numpy()
+
+        # Get coordinates of the image pixels
         if resolution is not None:
+            # Resample map to desired resolution
             ref_map = self.ref_map.resample(resolution)
+            # Get new coordinates of the image pixels
             img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
         else:
+            # Get coordinates of the image pixels
             img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
 
+        # Get rays from coordinates and pose
+        # rays_o: origin of the rays
+        # rays_d: direction of the rays
         rays_o, rays_d = get_rays(img_coords, target_pose)
+        # Convert rays to tensors
         rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
 
+
+        # Get image shape
         img_shape = rays_o.shape[:2]
+        # Flatten rays
         flat_rays_o = rays_o.reshape([-1, 3]).to(self.device)
         flat_rays_d = rays_d.reshape([-1, 3]).to(self.device)
 
-        # time = normalize_datetime(time, self.seconds_per_dt, self.ref_time)
+        #self.ref_time = datetime.strptime(ref_map.meta['t_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+        # time = normalize_datetime(datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f'), self.seconds_per_dt, self.ref_time)
+        # Create tensor of time values
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
         rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
             torch.split(flat_rays_d, batch_size), \
             torch.split(flat_time, batch_size)
+        wl = torch.tensor(wl).to(self.device)
+        wl = wl[None, :].expand(rays_o[0].shape[0], wl.shape[0])
 
+        # Initialize outputs
         outputs = {}
-        for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
-            b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
-            for k, v in b_outs.items():
-                if k not in outputs:
-                    outputs[k] = []
-                outputs[k].append(v)
+        # Iterate over batches of rays and time
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, wl)) for
+                       i, (b_rays_o, b_rays_d, b_time) in enumerate(zip(rays_o, rays_d, time))]
+            results = [(i, future.result()) for i, future in futures]
 
+        # Sort results by index to maintain order
+        results.sort(key=lambda x: x[0])
+
+        # Collect outputs in the correct order
+        for i, b_outs in results:
+            for k, v in b_outs.items():
+                outputs.setdefault(k, []).append(v)
+
+        # Concatenate and reshape outputs
+        # k: key, v: value
         results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
-        return results        
+        return results
