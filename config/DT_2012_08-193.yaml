@@ -1,19 +1,19 @@
-path_to_save: "/mnt/disks/data/sunerfs/obs/checkpoints"
-work_directory: '/mnt/disks/data/workspace/batches'
+path_to_save: "/mnt/disks/data-sunerf/checkpoints"
+work_directory: '/mnt/disks/data-sunerf/workspace/batches'
 
 data:
-  data_path: "/mnt/disks/data/sunerfs/simple_star/training_sets"
+  data_path: "/mnt/disks/data-sunerf/2012_11_aia_stereo"
   debug: False
-  cmap: "sdoaia193"
-  ref_time: "2012-08-23T00:00:00"
+  ref_time: "2012-10-31T00:00:00"
   batch_size: 3072
+  downscaling_factor: 32
 
 logging:
   project: "2024-SPI3S-3DSun"
-  name: "simple_star"
+  name: "aia_iti_stereo_128"
 
 training:
-  log_every_n_steps: 14000
+  log_every_n_steps: 1000
   epochs: 100
 
 #

@@ -25,7 +25,7 @@ so_norms = {304: ImageNormalize(vmin=0, vmax=300, stretch=LinearStretch(), clip=
 sdo_cmaps = {171: cm.sdoaia171, 174: cm.sdoaia171, 193: cm.sdoaia193, 211: cm.sdoaia211, 304: cm.sdoaia304}
 
 
-def loadAIAMap(file_path, resolution=1024, map_reproject=False):
+def loadAIAMap(file_path, resolution=1024, map_reproject=False, calibration:str='auto'):
     """Load and preprocess AIA file to make them compatible to ITI.
 
 
@@ -40,9 +40,11 @@ def loadAIAMap(file_path, resolution=1024, map_reproject=False):
     the preprocessed SunPy Map
     """
     s_map, _ = LoadMapEditor().call(file_path)
+    if s_map.meta['QUALITY'] != 0:
+        print(file_path)
     assert s_map.meta['QUALITY'] == 0, f'Invalid quality flag while loading AIA Map: {s_map.meta["QUALITY"]}'
-    s_map = NormalizeRadiusEditor(resolution).call(s_map)
-    s_map = AIAPrepEditor(calibration='auto').call(s_map)
+    # s_map = NormalizeRadiusEditor(resolution).call(s_map)
+    s_map = AIAPrepEditor(calibration=calibration).call(s_map)
     if map_reproject:
         s_map = transform(s_map, lat=s_map.heliographic_latitude,
                           lon=s_map.heliographic_longitude, distance=1 * u.AU)

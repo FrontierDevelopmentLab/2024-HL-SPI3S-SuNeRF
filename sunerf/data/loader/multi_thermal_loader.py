@@ -20,13 +20,15 @@ from sunerf.data.ray_sampling import get_rays
 import dateutil as dt
 from sunerf.data.utils import loadMapStack
 from astropy import units as u
+from skimage.measure import block_reduce
 
 
 
 class MultiThermalDataModule(BaseDataModule):
 
     def __init__(self, data_path, working_dir, Rs_per_ds=1, seconds_per_dt=86400, ref_time=None,
-                 batch_size=int(2 ** 10), debug=False, cmap='gray', **kwargs):
+                 batch_size=int(2 ** 10), debug=False, downscaling_factor=32, **kwargs):
+        self.downscaling_factor = downscaling_factor
         os.makedirs(working_dir, exist_ok=True)
 
         data_dict = self.get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug, seconds_per_dt=seconds_per_dt, ref_time=ref_time)
@@ -84,7 +86,7 @@ class MultiThermalDataModule(BaseDataModule):
 
         config = {'type': 'D_T', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,
                   'wavelengths': valid_wavelengths[0], 'resolution': valid_shapes,
-                  'times': valid_times[0], 'cmap': cmap}
+                  'times': valid_times[0]}
         super().__init__({'tracing': train_dataset}, {'test_image': valid_dataset},
                          start_time=times.min(), end_time=times.max(),
                          Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt, ref_time=ref_time,
@@ -190,7 +192,7 @@ class MultiThermalDataModule(BaseDataModule):
             with multiprocessing.Pool(os.cpu_count()) as p:
                 data = [v for v in
                         tqdm(p.imap(self._load_map_data, zip(data_sources[source]['file_stacks'], repeat(Rs_per_ds), repeat(data_sources[source]['wavelengths']),
-                                                             repeat(seconds_per_dt), repeat(ref_time))), 
+                                                             repeat(seconds_per_dt), repeat(ref_time), repeat(source), repeat(self.downscaling_factor))), 
                              total=len(data_sources[source]['file_stacks']), desc='Loading data')]
 
             if i==0:
@@ -205,14 +207,22 @@ class MultiThermalDataModule(BaseDataModule):
 
     def _load_map_data(self, data):
 
-        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time = data
+        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time, source, downscaling_factor = data
 
-        imager_stack = loadMapStack(stack_path, resolution=None, remove_nans=True,
-                                    map_reproject=False, aia_preprocessing=False, 
+        aia_preprocessing = False
+        resolution = None
+        if source.lower() == 'aia':
+            aia_preprocessing = True
+        else:
+            resolution = 4096
+        imager_stack = loadMapStack(stack_path, resolution=resolution, remove_nans=True,
+                                    map_reproject=False, aia_preprocessing=aia_preprocessing, 
                                     apply_norm=False, percentile_clip=None)
         
+        
+        imager_stack = block_reduce(imager_stack, (1,downscaling_factor,downscaling_factor), func=np.mean)
         # Read first file
-        s_map = Map(stack_path[0])
+        s_map = Map(stack_path[0]).resample((imager_stack.shape[1], imager_stack.shape[1]) * u.pix)
         time = normalize_datetime(s_map.date.datetime, seconds_per_dt, ref_time)
         pose = pose_spherical(-s_map.carrington_longitude.to(u.rad).value,
                             s_map.carrington_latitude.to(u.rad).value,

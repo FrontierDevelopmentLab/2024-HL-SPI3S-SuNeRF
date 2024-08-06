@@ -3,4 +3,5 @@ wandb
 pytorch-lightning==1.9.3
 numpy==1.26.2
 itipy
+scikit-image
 xitorch

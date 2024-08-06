@@ -11,6 +11,7 @@ from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
 from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.model import NeRF_DT
+torch.set_float32_matmul_precision('high')
 
 
 # Main function that sets up and runs the training process
