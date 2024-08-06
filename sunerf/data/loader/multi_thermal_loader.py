@@ -27,8 +27,9 @@ from skimage.measure import block_reduce
 class MultiThermalDataModule(BaseDataModule):
 
     def __init__(self, data_path, working_dir, Rs_per_ds=1, seconds_per_dt=86400, ref_time=None,
-                 batch_size=int(2 ** 10), debug=False, downscaling_factor=32, **kwargs):
+                 batch_size=int(2 ** 10), debug=False, downscaling_factor=32, aia_preprocessing=False, **kwargs):
         self.downscaling_factor = downscaling_factor
+        self.aia_preprocessing = aia_preprocessing
         os.makedirs(working_dir, exist_ok=True)
 
         data_dict = self.get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug, seconds_per_dt=seconds_per_dt, ref_time=ref_time)
@@ -211,18 +212,20 @@ class MultiThermalDataModule(BaseDataModule):
 
         aia_preprocessing = False
         resolution = None
-        if source.lower() == 'aia':
-            aia_preprocessing = True
-        else:
-            resolution = 4096
+        if 'aia' in source.lower():
+            aia_preprocessing = self.aia_preprocessing
+
         imager_stack = loadMapStack(stack_path, resolution=resolution, remove_nans=True,
                                     map_reproject=False, aia_preprocessing=aia_preprocessing, 
                                     apply_norm=False, percentile_clip=None)
         
-        
-        imager_stack = block_reduce(imager_stack, (1,downscaling_factor,downscaling_factor), func=np.mean)
-        # Read first file
-        s_map = Map(stack_path[0]).resample((imager_stack.shape[1], imager_stack.shape[1]) * u.pix)
+        if downscaling_factor > 1:
+            imager_stack = block_reduce(imager_stack, (1,downscaling_factor,downscaling_factor), func=np.mean)
+            # Read first file
+            s_map = Map(stack_path[0]).resample((imager_stack.shape[1], imager_stack.shape[1]) * u.pix)
+        else:
+            s_map = Map(stack_path[0])
+            
         time = normalize_datetime(s_map.date.datetime, seconds_per_dt, ref_time)
         pose = pose_spherical(-s_map.carrington_longitude.to(u.rad).value,
                             s_map.carrington_latitude.to(u.rad).value,
