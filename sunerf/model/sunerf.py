@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 from sunerf.data.loader.base_loader import BaseDataModule
 from sunerf.rendering.base_tracing import SuNeRFRendering
 from sunerf.rendering.emission import EmissionRadiativeTransfer
-from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
+from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
 from sunerf.train.scaling import ImageAsinhScaling
 
 
@@ -152,7 +152,7 @@ class EmissionSuNeRFModule(BaseSuNeRFModule):
 class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
     def __init__(self, Rs_per_ds, seconds_per_dt, image_scaling_config, model, loss=nn.MSELoss(), 
                  lambda_image=1.0, lambda_regularization=1.0,
-                 sampling_config=None, hierarchical_sampling_config=None, pixel_intensity_factor=1e17,
+                 sampling_config=None, hierarchical_sampling_config=None,
                  model_config=None, **kwargs):
 
         self.lambda_image = lambda_image
@@ -162,8 +162,8 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
         rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=Rs_per_ds,
                                                         sampling_config=sampling_config,
                                                         hierarchical_sampling_config=hierarchical_sampling_config,
-                                                        model_config=model_config, model=model, 
-                                                        pixel_intensity_factor=pixel_intensity_factor)
+                                                        model_config=model_config, model=model
+                                                        )
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
@@ -171,11 +171,11 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
         self.loss = loss
 
     def training_step(self, batch, batch_nb):
-        rays, time, target_image, wavelengths = batch['tracing']['rays'], batch['tracing']['time'], batch['tracing'][
-            'target_image'], batch['tracing']['wavelength']
+        rays, time, target_image, wavelengths, instruments = batch['tracing']['rays'], batch['tracing']['time'], batch['tracing'][
+            'target_image'], batch['tracing']['wavelength'], batch['tracing']['instrument']
         rays_o, rays_d = rays[:, 0], rays[:, 1]
         # Run one iteration of TinyNeRF and get the rendered filtergrams.
-        outputs = self.rendering.forward(rays_o, rays_d, time, wavelengths)
+        outputs = self.rendering.forward(rays_o, rays_d, time, wavelengths, instruments)
 
         # Check for any numerical issues.
         for k, v in outputs.items():
@@ -208,10 +208,10 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
     def validation_step(self, batch, batch_nb, **kwargs):
         dataloader_idx = kwargs['dataloader_idx'] if 'dataloader_idx' in kwargs else 0
         if dataloader_idx == 0:
-            rays, time, target_image, wavelengths = batch['rays'], batch['time'], batch['target_image'], batch[
-                'wavelength']
+            rays, time, target_image, wavelengths, instruments = batch['rays'], batch['time'], batch['target_image'], batch[
+                'wavelength'], batch['instrument']
             rays_o, rays_d = rays[:, 0], rays[:, 1]
-            outputs = self.rendering(rays_o, rays_d, time, wavelengths)
+            outputs = self.rendering(rays_o, rays_d, time, wavelengths, instruments)
 
             distance = rays_o.pow(2).sum(-1).pow(0.5)
             return {'target_image': target_image,

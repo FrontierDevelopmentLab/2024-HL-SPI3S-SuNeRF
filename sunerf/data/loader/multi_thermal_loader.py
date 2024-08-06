@@ -27,8 +27,8 @@ from skimage.measure import block_reduce
 class MultiThermalDataModule(BaseDataModule):
 
     def __init__(self, data_path, working_dir, Rs_per_ds=1, seconds_per_dt=86400, ref_time=None,
-                 batch_size=int(2 ** 10), debug=False, downscaling_factor=32, aia_preprocessing=False, **kwargs):
-        self.downscaling_factor = downscaling_factor
+                 batch_size=int(2 ** 10), debug=False, target_resolution=None, aia_preprocessing=False, **kwargs):
+        self.target_resolution = target_resolution
         self.aia_preprocessing = aia_preprocessing
         os.makedirs(working_dir, exist_ok=True)
 
@@ -40,13 +40,14 @@ class MultiThermalDataModule(BaseDataModule):
         times = data_dict['time']
         wavelengths = data_dict['wavelength']
         shapes = data_dict['shape']
+        instruments = data_dict['instrument']
 
         # log_overview(images, data_dict['pose'], np.unique(times), cmap, seconds_per_dt, ref_time)
 
         # select test image
         valid_index = len(images) // 6
 
-        valid_rays, valid_times, valid_images, valid_wavelengths, valid_shapes = rays[valid_index], times[valid_index], images[valid_index], wavelengths[valid_index], shapes[valid_index]
+        valid_rays, valid_times, valid_images, valid_wavelengths, valid_shapes, valid_instruments = rays[valid_index], times[valid_index], images[valid_index], wavelengths[valid_index], shapes[valid_index], instruments[valid_index]
 
         # load all training rays
         train_index = (np.arange(len(images)) != valid_index).nonzero()[0].tolist()
@@ -55,10 +56,11 @@ class MultiThermalDataModule(BaseDataModule):
         times = np.concatenate([times[i] for i in train_index], axis=0)
         images = np.concatenate([images[i] for i in train_index], axis=0)
         wavelengths = np.concatenate([wavelengths[i] for i in train_index], axis=0)
+        instruments = np.concatenate([instruments[i] for i in train_index], axis=0)
 
         # shuffle
         r = np.random.permutation(rays.shape[0])
-        rays, times, images, wavelengths = rays[r], times[r], images[r], wavelengths[r]
+        rays, times, images, wavelengths, instruments = rays[r], times[r], images[r], wavelengths[r], instruments[r]
 
         # save npy files
         # create file names
@@ -67,27 +69,29 @@ class MultiThermalDataModule(BaseDataModule):
         npy_times = os.path.join(working_dir, 'times_batches.npy')
         npy_images = os.path.join(working_dir, 'images_batches.npy')
         npy_wavelengths = os.path.join(working_dir, 'wavelengths_batches.npy')
+        npy_instruments = os.path.join(working_dir, 'instruments_batches.npy')
 
         # save to disk
         np.save(npy_rays, rays)
         np.save(npy_times, times)
         np.save(npy_images, images)
         np.save(npy_wavelengths, wavelengths)
+        np.save(npy_instruments, instruments)
 
         # adjust batch size
         N_GPUS = torch.cuda.device_count()
         batch_size = int(batch_size) * N_GPUS
 
         # init train dataset
-        train_dataset = MmapDataset({'target_image': npy_images, 'rays': npy_rays, 'time': npy_times, 'wavelength': npy_wavelengths},
+        train_dataset = MmapDataset({'target_image': npy_images, 'rays': npy_rays, 'time': npy_times, 'wavelength': npy_wavelengths, 'instrument': npy_instruments},
                                     batch_size=batch_size)
 
-        valid_dataset = ArrayDataset({'target_image': valid_images, 'rays': valid_rays, 'time': valid_times, 'wavelength': valid_wavelengths},
+        valid_dataset = ArrayDataset({'target_image': valid_images, 'rays': valid_rays, 'time': valid_times, 'wavelength': valid_wavelengths, 'instrument': valid_instruments},
                                      batch_size=batch_size)
 
         config = {'type': 'D_T', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,
                   'wavelengths': valid_wavelengths[0], 'resolution': valid_shapes,
-                  'times': valid_times[0]}
+                  'times': valid_times[0], 'instrument': valid_instruments[0]}
         super().__init__({'tracing': train_dataset}, {'test_image': valid_dataset},
                          start_time=times.min(), end_time=times.max(),
                          Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt, ref_time=ref_time,
@@ -149,23 +153,33 @@ class MultiThermalDataModule(BaseDataModule):
 
         # Create dictionaries characterizing datasources
         data_sources = {}
-        all_wavelengths = []
+        max_channels_n = 0
         for path in data_source_paths:
             source = path.split('/')[-1]
             wavelength_paths = [wv.decode("utf-8") for wv in next(os.walk(path))[1]]
             wavelength_paths.sort()
             # Create wavelengths and substitute STEREO ITI conversions for the AIA equivalent
             wavelengths = np.sort(np.array([int(wl) for wl in wavelength_paths]))
-            data_sources[source] = {'path': path, 'wavelengths': wavelengths}
-            all_wavelengths += [wavelengths]
+            max_channels_n = np.max([max_channels_n, len(wavelengths)])
+            if 'aia' in source.lower():
+                instrument = 0
+            elif 'euvia' in source.lower():
+                instrument = 1
+            elif 'euvib' in source.lower():
+                instrument = 2
+            elif 'eui' in source.lower():
+                instrument = 3
+            else:
+                instrument = 0
+                
+            data_sources[source] = {'path': path, 'wavelengths': wavelengths, 'instrument': instrument}
 
         # Redefine wavelengths to include information about their position and presence (or lack thereof)
-        all_wavelengths = np.unique(np.concatenate(all_wavelengths))
+        all_wavelengths = np.zeros((max_channels_n)).astype(int)
         for source in data_sources.keys():
-            _, _, wl_present = np.intersect1d(data_sources[source]['wavelengths'], all_wavelengths, return_indices=True)
-            wl_mask = all_wavelengths*0
-            wl_mask[wl_present] = 1
-            data_sources[source]['wavelengths'] = wl_mask*all_wavelengths
+            wl_present = all_wavelengths.copy()
+            wl_present[0:len(data_sources[source]['wavelengths'])] = np.array(data_sources[source]['wavelengths'])
+            data_sources[source]['wavelengths'] = wl_present
                 
         # Create a dataframe with the dates and filenames of the data
         for source in data_sources.keys():
@@ -193,7 +207,7 @@ class MultiThermalDataModule(BaseDataModule):
             with multiprocessing.Pool(os.cpu_count()) as p:
                 data = [v for v in
                         tqdm(p.imap(self._load_map_data, zip(data_sources[source]['file_stacks'], repeat(Rs_per_ds), repeat(data_sources[source]['wavelengths']),
-                                                             repeat(seconds_per_dt), repeat(ref_time), repeat(source), repeat(self.downscaling_factor))), 
+                                                             repeat(seconds_per_dt), repeat(ref_time), repeat(source), repeat(data_sources[source]['instrument']))), 
                              total=len(data_sources[source]['file_stacks']), desc='Loading data')]
 
             if i==0:
@@ -208,7 +222,7 @@ class MultiThermalDataModule(BaseDataModule):
 
     def _load_map_data(self, data):
 
-        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time, source, downscaling_factor = data
+        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time, source, instrument = data
 
         aia_preprocessing = False
         resolution = None
@@ -219,6 +233,9 @@ class MultiThermalDataModule(BaseDataModule):
                                     map_reproject=False, aia_preprocessing=aia_preprocessing, 
                                     apply_norm=False, percentile_clip=None)
         
+        downscaling_factor = 1 
+        if self.target_resolution is not None:
+            downscaling_factor = int(imager_stack.shape[1] / self.target_resolution)
         if downscaling_factor > 1:
             imager_stack = block_reduce(imager_stack, (1,downscaling_factor,downscaling_factor), func=np.mean)
             # Read first file
@@ -248,8 +265,9 @@ class MultiThermalDataModule(BaseDataModule):
                 n += 1
 
         extended_stack = extended_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0]))
-        wavelength_stack = wavelength_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0]))
+        wavelength_stack = wavelength_stack.transpose((1,2,0)).reshape((-1, wavelengths.shape[0])).astype(int)
         time = (time*np.ones(all_rays.shape[0])[:, None]).astype(np.float32)
-        shape = imager_stack.shape[1:]                      
+        shape = imager_stack.shape[1:]
+        instrument = (instrument*np.ones(all_rays.shape[0])).astype(int)       
 
-        return {'image': extended_stack, 'pose': pose, 'all_rays': all_rays, 'time': time, 'wavelength':wavelength_stack, 'shape': shape}
+        return {'image': extended_stack, 'pose': pose, 'all_rays': all_rays, 'time': time, 'wavelength':wavelength_stack, 'shape': shape, 'instrument': instrument}

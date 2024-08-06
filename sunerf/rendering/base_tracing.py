@@ -40,7 +40,7 @@ class SuNeRFRendering(nn.Module):
         self.coarse_model = model(**model_config)
         self.fine_model = model(**model_config)
 
-    def forward(self, rays_o, rays_d, times, wavelengths=None):
+    def forward(self, rays_o, rays_d, times, wavelengths=None, instruments=None):
         r"""_summary_
         		Compute forward pass through model.
 
@@ -65,7 +65,7 @@ class SuNeRFRendering(nn.Module):
         if wavelengths is None:
             coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals)
         else:
-            coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths)
+            coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths, instruments)
         outputs = {'z_vals_stratified': z_vals, 'coarse_image': coarse_out['image']}
 
         # Fine model pass.
@@ -83,7 +83,7 @@ class SuNeRFRendering(nn.Module):
         if wavelengths is None:
             fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined)
         else:
-            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths)
+            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths, instruments)
 
         # Store outputs.
         outputs['z_vals_hierarchical'] = z_hierarch
