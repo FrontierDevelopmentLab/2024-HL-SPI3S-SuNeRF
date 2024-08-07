@@ -99,7 +99,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
     """
 
     def __init__(self, model_config=None, device=None, aia_exp_time=2.9, 
-                 temperature_response_normalization = {0: 1e17, 1: 1e-11, 2: 1e-11}, **kwargs):
+                 temperature_response_normalization = {0: 1e17, 1: 1e-10, 2: 1e-10}, **kwargs):
         """ Initialize the DensityTemperatureRadiativeTransfer model.
 
         Parameters
@@ -142,6 +142,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                 log_temperature = aia_resp[f'A{wavelength}']['LOGTE']
                 # Get the response and multiply by the typical AIA exposure time
                 response = aia_resp[f'A{wavelength}']['TRESP'] * aia_exp_time * temperature_response_normalization[0]
+                print(f'AIA {key}: {np.mean(response)}')
                 # Interpolate the temperature response function
                 self.response[0][wavelength] = Interp1D(torch.from_numpy(log_temperature).float().to(self.device),
                                                      torch.from_numpy(response).float().to(self.device),
@@ -157,6 +158,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             log_temperature = np.log10(euvia_resp['p0'].item(0)[5]).astype(np.float32)
             # Get the response and multiply by the typical AIA exposure time
             response = euvia_resp['p0'].item(0)[7][i, 0, :].astype(np.float32) * temperature_response_normalization[1]
+            print(f'EUVIA {key}: {np.mean(response)}')
             # Interpolate the temperature response function
             self.response[1][wavelength] = Interp1D(torch.from_numpy(log_temperature).float().to(self.device),
                                                      torch.from_numpy(response).float().to(self.device),
@@ -172,10 +174,13 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             log_temperature = np.log10(euvib_resp['p0'].item(0)[5]).astype(np.float32)
             # Get the response and multiply by the typical AIA exposure time
             response = euvia_resp['p0'].item(0)[7][i, 0, :].astype(np.float32) * temperature_response_normalization[2]
+            print(f'EUVIA {key}: {np.mean(response)}')
             # Interpolate the temperature response function
             self.response[2][wavelength] = Interp1D(torch.from_numpy(log_temperature).float().to(self.device),
                                                      torch.from_numpy(response).float().to(self.device),
                                                      method='linear', extrap=0)
+            
+        print(response)
             
 
     def _render(self, model, query_points, rays_d, rays_o, z_vals, wavelengths, instruments):

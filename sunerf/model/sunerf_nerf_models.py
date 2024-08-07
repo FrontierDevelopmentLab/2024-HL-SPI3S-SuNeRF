@@ -172,6 +172,14 @@ class NeRF_DT(NeRF):
                                 ['2284', torch.tensor(19.6, dtype=torch.float32)],
                                 ['2304', torch.tensor(19.4, dtype=torch.float32)],
                         ])
+        
+        # self.log_absortpion = nn.Parameter(torch.tensor([[20, 20, 20,],
+        #                                                  [20, 20, 20,],
+        #                                                  [20, 20, 20,],
+        #                                                  [20, 20, 20,],
+        #                                                  [20, 0, 0,],
+        #                                                  [20, 0, 0,],
+        #                                                  [20, 0, 0]], dtype=torch.float32, requires_grad=True)) 
 
 
         self.volumetric_constant = nn.ParameterDict([

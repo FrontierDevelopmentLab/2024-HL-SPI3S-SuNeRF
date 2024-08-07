@@ -1,8 +1,8 @@
-path_to_save: "/home/christophschirninger/checkpoints"
-work_directory: '/mnt/disks/data-sunerf/workspace/batches'
+path_to_save: "/home/andres_munoz_j/checkpoints"
+work_directory: '/mnt/disks/andres_munoz_j/workspace/batches'
 
 data:
-  data_path: "/mnt/disks/2012_11_aia_stereo/hl24-aia_stereo_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
+  data_path: "/home/andres_munoz_j/hl24-aia_stereo_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
   debug: False
   ref_time: "2012-10-31T00:00:00"
   batch_size: 3072
@@ -11,11 +11,14 @@ data:
 
 logging:
   project: "2024-SPI3S-3DSun"
-  name: "aia_stereo_128"
+  name: "aia_stereo_128_scale"
 
 training:
-  log_every_n_steps: 6000
+  log_every_n_steps: 4000
   epochs: 100
+
+model:
+  temperature_response_normalization: {0: 1.e+20, 1: 1.e-8, 2: 1.e-8}
 
 #
 #training:
