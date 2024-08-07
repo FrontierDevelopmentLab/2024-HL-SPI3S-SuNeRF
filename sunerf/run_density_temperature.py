@@ -44,6 +44,8 @@ if __name__ == '__main__':
     log_every_n_steps = training_config['log_every_n_steps'] if 'log_every_n_steps' in training_config else None
     ckpt_path = training_config['meta_path'] if 'meta_path' in training_config else 'last'
     pixel_intensity_factor = training_config['pixel_intensity_factor'] if 'pixel_intensity_factor' in training_config else 1.e17
+    lambda_image = training_config['lambda_image'] if 'lambda_image' in training_config else 1.0
+    lambda_regularization = training_config['lambda_regularization'] if 'lambda_regularization' in training_config else 1.0
 
     # initialize logger
     logger = WandbLogger(**logging_config, save_dir=working_dir)
@@ -60,7 +62,7 @@ if __name__ == '__main__':
     sunerf = DensityTemperatureSuNeRFModule(Rs_per_ds=data_module.Rs_per_ds, seconds_per_dt=data_module.seconds_per_dt,
                                             image_scaling_config=image_scaling_config, model=model, loss=loss,
                                             validation_dataset_mapping=data_module.validation_dataset_mapping,
-                                            pixel_intensity_factor=pixel_intensity_factor,
+                                            pixel_intensity_factor=pixel_intensity_factor, lambda_image=lambda_image, lambda_regularization=lambda_regularization,
                                             **model_config)
 
     # initialize callbacks
