@@ -160,22 +160,27 @@ class MultiThermalDataModule(BaseDataModule):
             wavelength_paths.sort()
             # Create wavelengths and substitute STEREO ITI conversions for the AIA equivalent
             wavelengths = np.sort(np.array([int(wl) for wl in wavelength_paths]))
+            wavelength_names = wavelengths
             max_channels_n = np.max([max_channels_n, len(wavelengths)])
             if 'aia' in source.lower():
                 instrument = 0
+                _ , _, wavelengths = np.intersect1d(wavelengths, np.array([94, 131, 171, 193, 211, 304, 335]), return_indices=True)
             elif 'euvia' in source.lower():
                 instrument = 1
+                _ , _, wavelengths = np.intersect1d(wavelengths, np.array([171, 195, 284, 304]), return_indices=True)
             elif 'euvib' in source.lower():
                 instrument = 2
+                _ , _, wavelengths = np.intersect1d(wavelengths, np.array([171, 195, 284, 304]), return_indices=True)
             elif 'eui' in source.lower():
                 instrument = 3
             else:
                 instrument = 0
+                _ , _, wavelengths = np.intersect1d(wavelengths, np.array([94, 131, 171, 193, 211, 304, 335]), return_indices=True)
                 
-            data_sources[source] = {'path': path, 'wavelengths': wavelengths, 'instrument': instrument}
+            data_sources[source] = {'path': path, 'wavelengths': wavelengths, 'wavelength_names': wavelength_names, 'instrument': instrument}
 
         # Redefine wavelengths to include information about their position and presence (or lack thereof)
-        all_wavelengths = np.zeros((max_channels_n)).astype(int)
+        all_wavelengths = (np.zeros((max_channels_n))-1).astype(int)
         for source in data_sources.keys():
             wl_present = all_wavelengths.copy()
             wl_present[0:len(data_sources[source]['wavelengths'])] = np.array(data_sources[source]['wavelengths'])
@@ -184,7 +189,7 @@ class MultiThermalDataModule(BaseDataModule):
         # Create a dataframe with the dates and filenames of the data
         for source in data_sources.keys():
             n = 0
-            for wl in data_sources[source]['wavelengths']:
+            for wl in data_sources[source]['wavelength_names']:
                 if wl>0:
                     filenames = [f for f in sorted(glob.glob(f"{data_sources[source]['path']}/{wl}/*.fits"))]
                     iso_dates = self.dates_from_filenames(filenames)
@@ -259,7 +264,7 @@ class MultiThermalDataModule(BaseDataModule):
 
         n = 0
         for i, wl in enumerate(wavelengths):
-            if wl != 0:
+            if wl > -1:
                 extended_stack[i, :, :] = image[n, :, :]
                 wavelength_stack[i, :, :] = wl
                 n += 1

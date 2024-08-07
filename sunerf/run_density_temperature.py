@@ -70,7 +70,8 @@ if __name__ == '__main__':
 
     test_image_callback = TestMultiThermalImageCallback(data_module.validation_dataset_mapping[0],
                                             data_module.config['resolution'],
-                                            data_module.config['wavelengths'])
+                                            data_module.config['wavelengths'],
+                                            data_module.config['instrument'])
     callbacks = [checkpoint_callback, save_callback, test_image_callback]
 
     N_GPUS = torch.cuda.device_count()

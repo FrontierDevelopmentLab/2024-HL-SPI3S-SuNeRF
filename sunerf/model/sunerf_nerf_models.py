@@ -155,38 +155,39 @@ class NeRF_DT(NeRF):
         self.base_log_density = base_log_density
 
         # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
-        self.log_absortpion = nn.ParameterDict([
-                                ['094',  torch.tensor(20.4, dtype=torch.float32)],
-                                ['0131', torch.tensor(20.2, dtype=torch.float32)],
-                                ['0171', torch.tensor(20.0, dtype=torch.float32)],
-                                ['0193', torch.tensor(19.8, dtype=torch.float32)],
-                                ['0211', torch.tensor(19.6, dtype=torch.float32)],
-                                ['0304', torch.tensor(19.4, dtype=torch.float32)],
-                                ['0335', torch.tensor(19.2, dtype=torch.float32)],
-                                ['1171', torch.tensor(20.0, dtype=torch.float32)],
-                                ['1195', torch.tensor(19.8, dtype=torch.float32)],
-                                ['1284', torch.tensor(19.6, dtype=torch.float32)],
-                                ['1304', torch.tensor(19.4, dtype=torch.float32)],
-                                ['2171', torch.tensor(20.0, dtype=torch.float32)],
-                                ['2195', torch.tensor(19.8, dtype=torch.float32)],
-                                ['2284', torch.tensor(19.6, dtype=torch.float32)],
-                                ['2304', torch.tensor(19.4, dtype=torch.float32)],
-                        ])
+        # self.log_absortpion = nn.ParameterDict([
+        #                         ['094',  torch.tensor(20.4, dtype=torch.float32)],
+        #                         ['0131', torch.tensor(20.2, dtype=torch.float32)],
+        #                         ['0171', torch.tensor(20.0, dtype=torch.float32)],
+        #                         ['0193', torch.tensor(19.8, dtype=torch.float32)],
+        #                         ['0211', torch.tensor(19.6, dtype=torch.float32)],
+        #                         ['0304', torch.tensor(19.4, dtype=torch.float32)],
+        #                         ['0335', torch.tensor(19.2, dtype=torch.float32)],
+        #                         ['1171', torch.tensor(20.0, dtype=torch.float32)],
+        #                         ['1195', torch.tensor(19.8, dtype=torch.float32)],
+        #                         ['1284', torch.tensor(19.6, dtype=torch.float32)],
+        #                         ['1304', torch.tensor(19.4, dtype=torch.float32)],
+        #                         ['2171', torch.tensor(20.0, dtype=torch.float32)],
+        #                         ['2195', torch.tensor(19.8, dtype=torch.float32)],
+        #                         ['2284', torch.tensor(19.6, dtype=torch.float32)],
+        #                         ['2304', torch.tensor(19.4, dtype=torch.float32)],
+        #                 ])
         
-        # self.log_absortpion = nn.Parameter(torch.tensor([[20, 20, 20,],
-        #                                                  [20, 20, 20,],
-        #                                                  [20, 20, 20,],
-        #                                                  [20, 20, 20,],
-        #                                                  [20, 0, 0,],
-        #                                                  [20, 0, 0,],
-        #                                                  [20, 0, 0]], dtype=torch.float32, requires_grad=True)) 
+        self.log_absortpion = nn.Parameter(torch.tensor([[20., 20.1, 20.2,],
+                                                         [20.01, 20.11, 20.21,],
+                                                         [20.02, 20.12, 20.22,],
+                                                         [20.03, 20.13, 20.23,],
+                                                         [20.04, 0.14, 0.24,],
+                                                         [20.05, 0.15, 0.25,],
+                                                         [20.06, 0.16, 0.26]], dtype=torch.float32, requires_grad=True)) 
 
 
-        self.volumetric_constant = nn.ParameterDict([
-                                ['0', torch.tensor(1.0, dtype=torch.float32)],
-                                ['1', torch.tensor(1.0, dtype=torch.float32)],
-                                ['2', torch.tensor(1.0, dtype=torch.float32)],
-                        ])
+        # self.volumetric_constant = nn.ParameterDict([
+        #                         ['0', torch.tensor(1.0, dtype=torch.float32)],
+        #                         ['1', torch.tensor(1.0, dtype=torch.float32)],
+        #                         ['2', torch.tensor(1.0, dtype=torch.float32)],
+        #                 ])
+        self.volumetric_constant = nn.Parameter(torch.tensor([1, 1, 1,], dtype=torch.float32, requires_grad=True)) 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
