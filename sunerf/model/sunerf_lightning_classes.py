@@ -167,6 +167,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                                                         model_config=model_config, model=model,
                                                         temperature_response_normalization = temperature_response_normalization
                                                         )
+        rendering = nn.DataParallel(rendering)
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
@@ -214,6 +215,9 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
             rays, time, target_image, wavelengths, instruments = batch['rays'], batch['time'], batch['target_image'], batch[
                 'wavelength'], batch['instrument']
             rays_o, rays_d = rays[:, 0], rays[:, 1]
+
+            device = rays_o.device
+            self.rendering = self.rendering.to(device)
             outputs = self.rendering(rays_o, rays_d, time, wavelengths, instruments)
 
             distance = rays_o.pow(2).sum(-1).pow(0.5)
