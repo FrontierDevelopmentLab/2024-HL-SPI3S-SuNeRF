@@ -155,6 +155,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                  sampling_config=None, hierarchical_sampling_config=None,
                  model_config=None, 
                  temperature_response_normalization = {0: 1e17, 1: 1e-10, 2: 1e-10}, # Normalization for the AIA (0), EUVIA (1), and EUVIB (2) temperature response functions 
+                 use_aia_tresp = False,
                  **kwargs):
 
         self.lambda_image = lambda_image
@@ -165,7 +166,8 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                                                         sampling_config=sampling_config,
                                                         hierarchical_sampling_config=hierarchical_sampling_config,
                                                         model_config=model_config, model=model,
-                                                        temperature_response_normalization = temperature_response_normalization
+                                                        temperature_response_normalization = temperature_response_normalization,
+                                                        use_aia_tresp = use_aia_tresp
                                                         )
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
