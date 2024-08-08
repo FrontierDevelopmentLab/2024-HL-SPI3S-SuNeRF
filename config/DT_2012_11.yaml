@@ -5,20 +5,22 @@ data:
   data_path: "/home/andres_munoz_j/hl24-aia_stereo_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
   debug: False
   ref_time: "2012-10-31T00:00:00"
-  batch_size: 3072
+  batch_size: 4096
   target_resolution: 128
   aia_preprocessing: True
 
 logging:
   project: "2024-SPI3S-3DSun"
-  name: "aia_stereo_128_scale"
+  name: "aia_stereo_128_regularization"
 
 training:
-  log_every_n_steps: 4000
+  log_every_n_steps: 2500
   epochs: 100
 
 model:
   temperature_response_normalization: {0: 1.e+20, 1: 1.e-8, 2: 1.e-8}
+  use_aia_tresp: True
+  lambda_regularization: 30000
 
 #
 #training:
