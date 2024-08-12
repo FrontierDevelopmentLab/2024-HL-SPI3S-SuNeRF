@@ -25,7 +25,7 @@ class SuNeRFLoader:
         # Store data configuration
         self.config = data_config
         # Store wavelength
-        self.wavelength = data_config['wavelength']
+        self.wavelength = data_config['wavelengths']
         self.times = data_config['times']
         # Store World Coordinate System info
         self.wcs = data_config['wcs']
