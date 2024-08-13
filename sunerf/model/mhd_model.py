@@ -140,3 +140,35 @@ class MHDModel(nn.Module):
         # Output density, temperature, absorption and volumetric constant
         return {'inferences': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
                 'vol_c': self.volumetric_constant}
+
+
+
+
+
+if __name__ == 'main':
+
+    data_path = '/mnt/disks/data/MHD'
+
+    # Baseline un-trained MHD model
+    model = MHDModel(data_path=data_path)
+    # print(output_density, output_temperature)
+    
+    query_points =torch.tensor([
+        [1.0, 0.5, 0, 0], # Example point 1
+        [1, 1, 1, 1],   # Example point 2
+            # Can add more points as ineeded 
+        
+    ])
+    
+    output = model.forward(query_points=query_points)
+    
+    #output_density = inference[0]
+    output_density = output['inferences'][0]
+    
+    # output_temperature = inference[1]
+    output_temperature = output['inferences'][1]
+    
+    
+    print("Output density", output_density)
+    print("Output temp", output_temperature)
+    
