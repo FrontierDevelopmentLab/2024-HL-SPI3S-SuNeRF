@@ -23,33 +23,33 @@ from sunerf.evaluation.loader import ModelLoader
 from sunerf.train.coordinate_transformation import spherical_to_cartesian
 import matplotlib.pyplot as plt
 
-chk_path = '/home/andres_munoz_j/checkpoints/save_state.snf'
+chk_path = '/mnt/disks/data/sunerfs/psi/checkpoints/save_state.snf'
 load_ckpt = torch.load(chk_path)
 #result_path = '/mnt/disks/data/sunerfs/psi/evaluation'
 
-sdo_map = Map('/mnt/disks/data/raw/sdo_2012_08/1m_193/aia.lev1_euv_12s.2012-08-31T225908Z.193.image_lev1.fits')
-stereo_map = Map('/mnt/disks/data/raw/171/2012-09-06T20:00:00_A.fits')
+sdo_map = Map('/home/christophschirninger/2024-HL-SPI3S-SuNeRF/sunerf/2012-10-19T00:00:00.fits')
+#stereo_map = Map('/mnt/disks/data/raw/171/2012-09-06T20:00:00_A.fits')
 
 au = (1 * u.AU).to(u.solRad).value
-distance = 0.8 * au
+distance = 1.5 * au
 
 os.makedirs(result_path, exist_ok=True)
 data_path = '/mnt/disks/data/MHD'
 model_config = {'data_path': data_path}
 
 # init loader
-rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=MHDModel, model_config=model_config)
+#rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=MHDModel, model_config=model_config)
 loader = ModelLoader(rendering=load_ckpt['rendering'], model=load_ckpt['rendering'].fine_model, ref_map=sdo_map)
 cmap = load_ckpt['data_config']['wavelengths']
 
 # find center point on sphere
 center = spherical_to_cartesian(1, 18 * np.pi / 180, 190 * np.pi / 180)
-meta_data = load_observer_meta('/mnt/disks/data/raw/sdo_2012_08/1m_193/aia.lev1_euv_12s.2012-08-31T225908Z.193.image_lev1.fits')
+meta_data = load_observer_meta('/home/christophschirninger/2024-HL-SPI3S-SuNeRF/sunerf/2012-10-19T00:00:00.fits')
 lat, lon, d, time = meta_data
 t = datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f')
 
 outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=cmap, distance=d*u.AU,
-                                                   batch_size=1024, resolution=(4, 4)*u.pix)
+                                                   batch_size=1024, resolution=(64, 64)*u.pix)
 
 
 # Plot fine image
@@ -66,4 +66,4 @@ ax[2].set_title('193 $\AA$', fontsize=20)
 ax[3].set_title('211 $\AA$', fontsize=20)
 ax[4].set_title('304 $\AA$', fontsize=20)
 ax[5].set_title('335 $\AA$', fontsize=20)
-plt.savefig('First_MHD_rendered.jpg', dpi=200, transparent=True)
+plt.savefig('First_SuNeRF_DT_ITI_rendered_Mars.jpg', dpi=200, transparent=True)

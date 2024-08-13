@@ -5,3 +5,4 @@ numpy==1.26.2
 itipy
 scikit-image
 xitorch
+cupy
