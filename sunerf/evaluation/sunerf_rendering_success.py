@@ -16,16 +16,16 @@ from tqdm import tqdm
 from sunerf.model.mhd_model import MHDModel
 import torch
 
-from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
+from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.image_render import load_observer_meta
 from sunerf.data.utils import sdo_cmaps, sdo_norms
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.train.coordinate_transformation import spherical_to_cartesian
 import matplotlib.pyplot as plt
 
-chk_path = '/mnt/disks/data/sunerfs/psi/checkpoints/save_state.snf'
+chk_path = '/home/andres_munoz_j/checkpoints/save_state.snf'
 load_ckpt = torch.load(chk_path)
-result_path = '/mnt/disks/data/sunerfs/psi/evaluation'
+#result_path = '/mnt/disks/data/sunerfs/psi/evaluation'
 
 sdo_map = Map('/mnt/disks/data/raw/sdo_2012_08/1m_193/aia.lev1_euv_12s.2012-08-31T225908Z.193.image_lev1.fits')
 stereo_map = Map('/mnt/disks/data/raw/171/2012-09-06T20:00:00_A.fits')
