@@ -216,7 +216,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             - weights: Weights of the filtergrams.
             - absorption: Absorption coefficient.
         """
-        wavelengths = wavelengths[:, None, :].expand(wavelengths.shape[0], inferences.shape[1], wavelengths.shape[1])
+        wavelengths = wavelengths[:, None, :].expand(inferences.shape[0], inferences.shape[1], wavelengths.shape[1])
 
         # Difference between consecutive elements of `z_vals`. [n_rays, n_samples]
         # compute line element (dz) for integration

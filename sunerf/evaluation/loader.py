@@ -135,16 +135,21 @@ class SuNeRFLoader:
 
 
 class ModelLoader(SuNeRFLoader):    
-    def __init__(self, rendering, model, ref_map, device=None):
+    def __init__(self, rendering, model, ref_map, serial=False, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
         
         self.device = device
         self.ref_map = ref_map
-        self.rendering = nn.DataParallel(rendering).to(device)
-        self.model = nn.DataParallel(model).to(device)   
+        if serial:
+            self.rendering = rendering.to(device)
+            self.model = model.to(device) 
+        else:
+            self.rendering = nn.DataParallel(rendering).to(device)
+            self.model = nn.DataParallel(model).to(device)
         self.seconds_per_dt = 1
-        self.ref_time = datetime.strptime(ref_map.meta['t_obs'] 
-                                          if ('t_obs' in ref_map.meta) else ref_map.meta['date-obs'], 
+        self.serial = serial
+        self.ref_time = datetime.strptime(ref_map.meta['t_obs'][:-1] 
+                                          if ('t_obs' in ref_map.meta) else ref_map.meta['date-obs'][:-1], 
                                           '%Y-%m-%dT%H:%M:%S.%f')
 
     def process_batch(self, b_rays_o, b_rays_d, b_time, b_wl):
@@ -223,18 +228,26 @@ class ModelLoader(SuNeRFLoader):
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, wl)) for
-                       i, (b_rays_o, b_rays_d, b_time) in enumerate(zip(rays_o, rays_d, time))]
-            results = [(i, future.result()) for i, future in futures]
+        if self.serial:
+            for b_rays_o, b_rays_d, b_time, wl in zip(rays_o, rays_d, time, wl):
+                b_outs = self.rendering(b_rays_o, b_rays_d, b_time, wl[None, :])
+                for k, v in b_outs.items():
+                    if k not in outputs:
+                        outputs[k] = []
+                    outputs[k].append(v)
+        else:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, wl)) for
+                        i, (b_rays_o, b_rays_d, b_time) in enumerate(zip(rays_o, rays_d, time))]
+                results = [(i, future.result()) for i, future in futures]
 
-        # Sort results by index to maintain order
-        results.sort(key=lambda x: x[0])
+            # Sort results by index to maintain order
+            results.sort(key=lambda x: x[0])
 
-        # Collect outputs in the correct order
-        for i, b_outs in results:
-            for k, v in b_outs.items():
-                outputs.setdefault(k, []).append(v)
+            # Collect outputs in the correct order
+            for i, b_outs in results:
+                for k, v in b_outs.items():
+                    outputs.setdefault(k, []).append(v)
 
         # Concatenate and reshape outputs
         # k: key, v: value

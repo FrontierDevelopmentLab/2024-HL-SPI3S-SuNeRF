@@ -13,8 +13,11 @@ from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTran
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
+from sunerf.model.sunerf import DensityTemperatureSuNeRFModule
 import glob
 import yaml
+import torch
+from sunerf.model.model import NeRF_DT
 
 
 class ImageRender:
@@ -90,6 +93,8 @@ class ImageRender:
                 print(f"File exists in image path: {img_path} and overwrite is set to False. Skipping...")
             plt.close('all')
 
+
+
     def frame_to_fits(self, filename, observer_name, observer_file, images, wavelengths, resolution, overwrite=False):
         r"""Method that saves an image from a viewpoint as the ith frame as fits file
 
@@ -114,7 +119,8 @@ class ImageRender:
         -------
         None
         """
-        
+     
+       
         s_map = Map(observer_file)   
         # modify header meta to get proper resolution and wavelength
         s_map = s_map.resample(resolution)
@@ -246,22 +252,46 @@ if __name__ == '__main__':
     elif model == 'MHDModel':
         # Path to MHD data
         data_path = '/mnt/disks/data/MHD'
+        
         # List of all density files
         density_files = sorted(glob.glob(os.path.join(data_path, 'rho', '*.h5')))
+        
         # Identify timesteps for first and last file
         t_i = int(density_files[0].split('00')[1].split('.h5')[0])
         t_f = int(density_files[-1].split('00')[1].split('.h5')[0])
         t_shift = 0
         # Timestep = 1 hour
         dt = 3600.0
+        
         # Model
         model = MHDModel
         model_config = {'data_path': data_path}
         
     elif model == 'SuNeRF':
-        print('TBD')
-        # initialize sunerf
-    
+        
+        # path to nerf data # TODO: confrim this is correct for nerf
+        data_path = '/mnt/disks/data/MHD' 
+        
+        # List of all density files # TODO: confrim this is correct for nerf
+        density_files = sorted(glob.glob(os.path.join(data_path, 'rho', '*.h5')))
+        
+        # path to last checkpoint
+        checkpoint_path = "/mnt/disks/data/sunerfs/psi/mhd_512_checkpoint_8-13/save_state.snf"
+
+        # load SuNeRF model
+        sunerf_model = torch.load(checkpoint_path)
+        
+        # identify timesteps # TODO: confrim this is correct for nerf
+        t_i = int(density_files[0].split('00')[1].split('.h5')[0])
+        t_f = int(density_files[-1].split('00')[1].split('.h5')[0])
+        t_shift = 0
+        dt = 3600.0
+        
+        # initialize example model to overwrite rendering
+     #  model = NeRF_DT
+        model_config = {}
+        
+
     else:
         raise ValueError('Model not implemented')
 
@@ -271,11 +301,18 @@ if __name__ == '__main__':
     # Iterate over the unpacked point coordinates and render images
     # Loop over observers
     for j, files in enumerate(observer_files):
-        rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
-                                                        model_config=model_config)
-        loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+        
+        if model == 'SuNeRF':
+            loader = ModelLoader(rendering=sunerf_model["rendering"], model=sunerf_model["rendering"].fine_model, ref_map=s_map, serial=True)
+            
+        else:
+            rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
+                                                            model_config=model_config)
+            loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+            
         render = ImageRender(render_path)
-        resolution = (observer_res[j], observer_res[j])*u.pix
+        # resolution = (observer_res[j], observer_res[j])*u.pix
+        resolution = (256, 256)*u.pix
         # Loop over observer files
         for i, (lat, lon, d, time) in tqdm(enumerate(observer_meta[j]), total=len(observer_meta[j])):
             # Convert time to seconds (fractional) 0 to 1 value that is expected by MHD
@@ -290,8 +327,13 @@ if __name__ == '__main__':
                 # 360 days in 25.38 days in 24 hours and 3600 sec 
                 elapsed_rotation = 360/(25.38*24*3600)*elapsed_t
                 lon = lon - elapsed_rotation
+
+            if model == 'SuNeRF':
+                wl = sunerf_model['data_config']['wavelengths']
+            else:
+                wl = np.array(observer_wl[j])
             # Outputs 
-            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=np.array(observer_wl[j]), distance=d*u.AU,
+            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=wl, distance=d*u.AU,
                                                    batch_size=batch_size, resolution=resolution)
 
             # Save as fits
