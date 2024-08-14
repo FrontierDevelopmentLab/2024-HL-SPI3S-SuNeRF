@@ -220,6 +220,7 @@ if __name__ == '__main__':
     observer_ref = config['observer_ref']
     batch_size = config['batch_size']
     model = config['model']
+    enforce_solar_rotation = config['enforce_solar_rotation']
     
     # Find files and metadata for each observer
     observer_files = [sorted(glob.glob(f"{dir}/*.fits")) for dir in observer_dir]
@@ -241,6 +242,7 @@ if __name__ == '__main__':
         # Model
         model = SimpleStar
         model_config = {}
+        
     elif model == 'MHDModel':
         # Path to MHD data
         data_path = '/mnt/disks/data/MHD'
@@ -255,6 +257,11 @@ if __name__ == '__main__':
         # Model
         model = MHDModel
         model_config = {'data_path': data_path}
+        
+    elif model == 'SuNeRF':
+        print('TBD')
+        # initialize sunerf
+    
     else:
         raise ValueError('Model not implemented')
 
@@ -274,7 +281,16 @@ if __name__ == '__main__':
             # Convert time to seconds (fractional) 0 to 1 value that is expected by MHD
             t = ((datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
                   s_map_t).total_seconds()+t_shift*dt)/((t_f-t_i)*dt)
-            # Outputs
+            
+            if enforce_solar_rotation:
+            # Elapsed time - difference between time from beginning of render to current time of rendering
+                elapsed_t = (datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
+                    s_map_t).total_seconds()
+                # Elapsed rotation - current rotation of the sun based on elapsed time in images
+                # 360 days in 25.38 days in 24 hours and 3600 sec 
+                elapsed_rotation = 360/(25.38*24*3600)*elapsed_t
+                lon = lon - elapsed_rotation
+            # Outputs 
             outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=np.array(observer_wl[j]), distance=d*u.AU,
                                                    batch_size=batch_size, resolution=resolution)
 
