@@ -27,8 +27,8 @@ from skimage.measure import block_reduce
 class MultiThermalDataModule(BaseDataModule):
 
     def __init__(self, data_path, working_dir, Rs_per_ds=1, seconds_per_dt=86400, ref_time=None,
-                 batch_size=int(2 ** 10), debug=False, downscaling_factor=32, aia_preprocessing=False, **kwargs):
-        self.downscaling_factor = downscaling_factor
+                 batch_size=int(2 ** 10), debug=False, target_resolution=None, aia_preprocessing=False, **kwargs):
+        self.target_resolution = target_resolution
         self.aia_preprocessing = aia_preprocessing
         os.makedirs(working_dir, exist_ok=True)
 
@@ -193,7 +193,7 @@ class MultiThermalDataModule(BaseDataModule):
             with multiprocessing.Pool(os.cpu_count()) as p:
                 data = [v for v in
                         tqdm(p.imap(self._load_map_data, zip(data_sources[source]['file_stacks'], repeat(Rs_per_ds), repeat(data_sources[source]['wavelengths']),
-                                                             repeat(seconds_per_dt), repeat(ref_time), repeat(source), repeat(self.downscaling_factor))), 
+                                                             repeat(seconds_per_dt), repeat(ref_time), repeat(source))), 
                              total=len(data_sources[source]['file_stacks']), desc='Loading data')]
 
             if i==0:
@@ -208,7 +208,7 @@ class MultiThermalDataModule(BaseDataModule):
 
     def _load_map_data(self, data):
 
-        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time, source, downscaling_factor = data
+        stack_path, Rs_per_ds, wavelengths, seconds_per_dt, ref_time, source = data
 
         aia_preprocessing = False
         resolution = None
@@ -219,6 +219,9 @@ class MultiThermalDataModule(BaseDataModule):
                                     map_reproject=False, aia_preprocessing=aia_preprocessing, 
                                     apply_norm=False, percentile_clip=None)
         
+        downscaling_factor = 1 
+        if self.target_resolution is not None:
+            downscaling_factor = int(imager_stack.shape[1] / self.target_resolution)
         if downscaling_factor > 1:
             imager_stack = block_reduce(imager_stack, (1,downscaling_factor,downscaling_factor), func=np.mean)
             # Read first file
