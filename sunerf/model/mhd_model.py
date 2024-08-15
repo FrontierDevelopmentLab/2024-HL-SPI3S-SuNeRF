@@ -138,5 +138,5 @@ class MHDModel(nn.Module):
             output_temperature[mask] = torch.log10(1e6*((1-frame_fraction)*f1_t + frame_fraction*f2_t))
 
         # Output density, temperature, absorption and volumetric constant
-        return {'rho_T': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
+        return {'inferences': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
                 'vol_c': self.volumetric_constant}
