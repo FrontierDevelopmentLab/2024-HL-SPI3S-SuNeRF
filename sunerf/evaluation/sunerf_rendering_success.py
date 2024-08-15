@@ -16,7 +16,7 @@ from tqdm import tqdm
 from sunerf.model.mhd_model import MHDModel
 import torch
 
-from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
+from sunerf.sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.image_render import load_observer_meta
 from sunerf.data.utils import sdo_cmaps, sdo_norms
 from sunerf.evaluation.loader import ModelLoader

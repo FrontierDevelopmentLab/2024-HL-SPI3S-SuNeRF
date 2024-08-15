@@ -216,7 +216,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             - weights: Weights of the filtergrams.
             - absorption: Absorption coefficient.
         """
-        wavelengths = wavelengths[:, None, :].expand(wavelengths.shape[0], inferences.shape[1], wavelengths.shape[1])
+        wavelengths = wavelengths[:, None, :].expand(inferences.shape[0], inferences.shape[1], wavelengths.shape[1])
 
         # Difference between consecutive elements of `z_vals`. [n_rays, n_samples]
         # compute line element (dz) for integration
@@ -264,8 +264,16 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,1:,:]   #TODO: Check which emission indexes should go here
         pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1) * vol_c * self.pixel_intensity_factor   # TODO: Check which z_vals indexes should go here
 
+        dem = torch.exp(-absorption_integral) * density.pow(2)[:,1:,:]
+        em = torch.trapezoid(dem, x=z_vals[:, 1:, None], dim=1) * vol_c * self.pixel_intensity_factor   # TODO: Check which z_vals indexes should go here
+
+        mean_temp = torch.trapezoid(density*torch.pow(10, log_temperature), x=z_vals[:,:,None], dim=1)
+        mean_temp = mean_temp/torch.trapezoid(density, x=z_vals[:,:,None], dim=1)
+
+        mean_rho = torch.trapezoid(density, x=z_vals[:,:,None], dim=1)/torch.trapezoid(density*0+1, x=z_vals[:,:,None], dim=1)
+
         # set the weights to the intensity contributions
         weights = (nn.functional.relu(inferences[...,0]))
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
-        return {'image': pixel_intensity, 'weights': weights, 'absorption': absorption}
+        return {'image': pixel_intensity, 'weights': weights, 'absorption': absorption, 'EM': em, 'meanT': mean_temp, 'mean_rho': mean_rho}

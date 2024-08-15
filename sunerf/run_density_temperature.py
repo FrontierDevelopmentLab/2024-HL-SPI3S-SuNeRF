@@ -10,7 +10,7 @@ import dateutil as dt
 from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
 from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
-from sunerf.model.sunerf_nerf_models import NeRF_DT
+from sunerf.sunerf.model.model import NeRF_DT
 torch.set_float32_matmul_precision('high')
 
 
