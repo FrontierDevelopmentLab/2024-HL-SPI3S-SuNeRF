@@ -37,6 +37,8 @@ class VideoRender(ImageRender):
         for key in vparams.keys():
             self.vparams[key] = vparams[key]
 
+        self.batch_size = self.vparams['render']['batch_size']
+
         # Choose device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.n_gpus = torch.cuda.device_count()

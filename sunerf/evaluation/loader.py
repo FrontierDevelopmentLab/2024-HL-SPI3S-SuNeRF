@@ -218,26 +218,28 @@ class ModelLoader(SuNeRFLoader):
         # Create tensor of time values
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
-        rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
-            torch.split(flat_rays_d, batch_size), \
-            torch.split(flat_time, batch_size)
         wl = torch.tensor(wl).to(self.device)
-        wl = wl[None, :].expand(rays_o[0].shape[0], wl.shape[0])
+        flat_wl = wl[None,:].expand(flat_rays_o.shape[0],wl.shape[0])
+        
+        rays_o, rays_d, time, wl = torch.split(flat_rays_o, batch_size), \
+            torch.split(flat_rays_d, batch_size), \
+            torch.split(flat_time, batch_size), \
+            torch.split(flat_wl, batch_size)
 
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time
         if self.serial:
-            for b_rays_o, b_rays_d, b_time, wl in zip(rays_o, rays_d, time, wl):
-                b_outs = self.rendering(b_rays_o, b_rays_d, b_time, wl[None, :])
+            for b_rays_o, b_rays_d, b_time, b_wl in zip(rays_o, rays_d, time, wl):
+                b_outs = self.rendering(b_rays_o, b_rays_d, b_time, b_wl)
                 for k, v in b_outs.items():
                     if k not in outputs:
                         outputs[k] = []
                     outputs[k].append(v)
         else:
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, wl)) for
-                        i, (b_rays_o, b_rays_d, b_time) in enumerate(zip(rays_o, rays_d, time))]
+                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, b_wl)) for
+                        i, (b_rays_o, b_rays_d, b_time, b_wl) in enumerate(zip(rays_o, rays_d, time, wl))]
                 results = [(i, future.result()) for i, future in futures]
 
             # Sort results by index to maintain order
