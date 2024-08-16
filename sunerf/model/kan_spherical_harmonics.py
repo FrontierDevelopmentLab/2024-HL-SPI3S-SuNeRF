@@ -11,6 +11,92 @@ class SplineLinear(nn.Linear):
     def reset_parameters(self) -> None:
         nn.init.trunc_normal_(self.weight, mean=0, std=self.init_scale)
 
+class RadialBasisFunction(nn.Module):
+    def __init__(
+        self,
+        grid_min: float = -2.,
+        grid_max: float = 2.,
+        num_grids: int = 8,
+        denominator: float = None,  # larger denominators lead to smoother basis
+    ):
+        super().__init__()
+        self.grid_min = grid_min
+        self.grid_max = grid_max
+        self.num_grids = num_grids
+        grid = torch.linspace(grid_min, grid_max, num_grids)
+        self.grid = torch.nn.Parameter(grid, requires_grad=False)
+        self.denominator = denominator or (grid_max - grid_min) / (num_grids - 1)
+
+    def forward(self, x):
+        return torch.exp(-((x[..., None] - self.grid) / self.denominator) ** 2)
+
+class FastKANLayer(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        grid_min: float = -2.,
+        grid_max: float = 2.,
+        num_grids: int = 8,
+        use_base_update: bool = True,
+        use_layernorm: bool = True,
+        base_activation = F.silu,
+        spline_weight_init_scale: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.layernorm = None
+        if use_layernorm:
+            assert input_dim > 1, "Do not use layernorms on 1D inputs. Set `use_layernorm=False`."
+            self.layernorm = nn.LayerNorm(input_dim)
+        self.rbf = RadialBasisFunction(grid_min, grid_max, num_grids)
+        self.spline_linear = SplineLinear(input_dim * num_grids, output_dim, spline_weight_init_scale)
+        self.use_base_update = use_base_update
+        if use_base_update:
+            self.base_activation = base_activation
+            self.base_linear = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x, use_layernorm=True):
+        if self.layernorm is not None and use_layernorm:
+            spline_basis = self.rbf(self.layernorm(x))
+        else:
+            spline_basis = self.rbf(x)
+        ret = self.spline_linear(spline_basis.view(*spline_basis.shape[:-2], -1))
+        if self.use_base_update:
+            base = self.base_linear(self.base_activation(x))
+            ret = ret + base
+        return ret
+
+    def plot_curve(
+        self,
+        input_index: int,
+        output_index: int,
+        num_pts: int = 1000,
+        num_extrapolate_bins: int = 2
+    ):
+        '''this function returns the learned curves in a FastKANLayer.
+        input_index: the selected index of the input, in [0, input_dim) .
+        output_index: the selected index of the output, in [0, output_dim) .
+        num_pts: num of points sampled for the curve.
+        num_extrapolate_bins (N_e): num of bins extrapolating from the given grids. The curve 
+            will be calculate in the range of [grid_min - h * N_e, grid_max + h * N_e].
+        '''
+        ng = self.rbf.num_grids
+        h = self.rbf.denominator
+        assert input_index < self.input_dim
+        assert output_index < self.output_dim
+        w = self.spline_linear.weight[
+            output_index, input_index * ng : (input_index + 1) * ng
+        ]   # num_grids,
+        x = torch.linspace(
+            self.rbf.grid_min - num_extrapolate_bins * h,
+            self.rbf.grid_max + num_extrapolate_bins * h,
+            num_pts
+        )   # num_pts, num_grids
+        with torch.no_grad():
+            y = (w * self.rbf(x.to(w.dtype))).sum(-1)
+        return x, y
 
 class SphericalBessel(nn.Module):
     def __init__(self, k_max: int = 1, l_max: int = 0):
@@ -127,8 +213,11 @@ class OrthonormalTimeSphericalNeRF(nn.Module):
 
     def forward(self, x):
         fourier = self.t_fourier(x[:, 3])
+        fourier[torch.isnan(fourier)] = 0
         bessel = self.r_bessel(torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2]))
+        bessel[torch.isnan(bessel)] = 0
         sh = self.sh(x[:, 0:3].contiguous())
+        sh[torch.isnan(sh)] = 0
 
         x = self.spline_linear((sh[:,:,:,None, None]*bessel[:,:,None,:, None]*fourier[:, None, None, None,:]).reshape(x.shape[0], -1))
         
@@ -136,5 +225,8 @@ class OrthonormalTimeSphericalNeRF(nn.Module):
         x[:, 0] = x[:, 0] + self.base_log_density
         # Add base temperature
         x[:, 1] = x[:, 1] + self.base_log_temperature
+
+        if x.isnan().any():
+            print('nan')
 
         return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
