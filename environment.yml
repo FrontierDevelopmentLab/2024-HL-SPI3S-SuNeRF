@@ -10,7 +10,6 @@ dependencies:
   - snakemake
   - wandb
   - ipywidgets
-  - ipkernel
   - pytorch::pytorch
   - pytorch::torchvision
   - pytorch::torchaudio
