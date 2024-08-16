@@ -1,0 +1,27 @@
+name: sunerf2
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+  - rapidsai
+  - bioconda
+dependencies:
+  - python=3.12
+  - snakemake
+  - wandb
+  - ipywidgets
+  - ipkernel
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  - pytorch::pytorch-cuda=12.4
+  - nvidia::cuda-toolkit=12.4
+  - lightning
+  - scikit-learn
+  - sunpy
+  - pandas
+  - matplotlib
+  - pip
+  - pip:
+    - itipy
+    - xitorch

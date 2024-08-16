@@ -11,6 +11,7 @@ from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
 from sunerf.model.sunerf_lightning_classes import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.sunerf_nerf_models import NeRF_DT
+from sunerf.model.kan_spherical_harmonics import OrthonormalTimeSphericalNeRF
 torch.set_float32_matmul_precision('high')
 
 
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     # initialize SuNeRF model
     
     loss = nn.MSELoss()
-    model = NeRF_DT
+    model = OrthonormalTimeSphericalNeRF
     sunerf = DensityTemperatureSuNeRFModule(Rs_per_ds=data_module.Rs_per_ds, seconds_per_dt=data_module.seconds_per_dt,
                                             image_scaling_config=image_scaling_config, model=model, loss=loss,
                                             validation_dataset_mapping=data_module.validation_dataset_mapping,
