@@ -58,7 +58,7 @@ class SphericalHarmonicsModule(nn.Module):
     def __init__(self, l_max: int = 1):
         super().__init__()
         self.l_max = l_max
-        self.sh = sct.SphericalHarmonics(l_max=8, normalized=True)
+        self.sh = sct.SphericalHarmonics(l_max=self.l_max, normalized=True)
 
     def forward(self, xyz):
         sh_values = self.sh.compute(xyz.to(torch.float64))
