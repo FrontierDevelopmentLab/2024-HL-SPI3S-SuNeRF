@@ -1,20 +1,20 @@
-path_to_save: "/home/andres_munoz_j/checkpoints"
-work_directory: '/mnt/disks/andres_munoz_j/workspace/batches'
+path_to_save: "/d0/amunozj/sunerf/checkpoint_kan"
+work_directory: '/d0/amunozj/sunerf/workspace_kan/batches'
 
 data:
-  data_path: "/home/andres_munoz_j/hl24-aia_stereo_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
-  debug: False
+  data_path: "/d0/amunozj/hl24-aia_stereo-iti_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
+  debug: True
   ref_time: "2012-10-31T00:00:00"
-  batch_size: 4096
+  batch_size: 2048
   target_resolution: 512
   aia_preprocessing: True
 
 logging:
   project: "2024-SPI3S-3DSun"
-  name: "aia_stereo_sh"
+  name: "aia_iti_kan"
 
 training:
-  log_every_n_steps: 2500
+  log_every_n_steps: 700
   epochs: 100
 
 model:
@@ -22,9 +22,9 @@ model:
   use_aia_tresp: True
   lambda_regularization: 1
   model_config:
-    k_max: 20 
-    l_max: 20 
-    n_max: 20
+    k_max: 2 
+    l_max: 2 
+    n_max: 2
     t_scale: 1    
 
 

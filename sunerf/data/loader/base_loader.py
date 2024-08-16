@@ -5,7 +5,7 @@ from itertools import repeat
 
 import numpy as np
 from astropy import units as u
-from pytorch_lightning import LightningDataModule
+from lightning.pytorch import LightningDataModule
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch.utils.data import DataLoader, RandomSampler

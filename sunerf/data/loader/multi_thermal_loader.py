@@ -156,7 +156,7 @@ class MultiThermalDataModule(BaseDataModule):
         max_channels_n = 0
         for path in data_source_paths:
             source = path.split('/')[-1]
-            wavelength_paths = [wv.decode("utf-8") for wv in next(os.walk(path))[1]]
+            wavelength_paths = [wv for wv in next(os.walk(path))[1]]
             wavelength_paths.sort()
             # Create wavelengths and substitute STEREO ITI conversions for the AIA equivalent
             wavelengths = np.sort(np.array([int(wl) for wl in wavelength_paths]))

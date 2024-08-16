@@ -151,10 +151,10 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                                                      method='linear', extrap=0)
 
                 if use_aia_tresp:
-                    if wavelength == 193:
-                        wavelength = 195
-                    if wavelength == 211:
-                        wavelength = 284    
+                    # if wavelength == 193:
+                    #     wavelength = 195
+                    # if wavelength == 211:
+                    #     wavelength = 284    
                     self.response[1][wavelength] = Interp1D(torch.from_numpy(log_temperature).float().to(self.device),
                                                      torch.from_numpy(response).float().to(self.device),
                                                      method='linear', extrap=0)

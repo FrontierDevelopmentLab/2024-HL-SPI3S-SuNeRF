@@ -1,11 +1,13 @@
 import argparse
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+
 from torch import nn
 import torch
 import yaml
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
-from pytorch_lightning.loggers import WandbLogger
+from lightning.pytorch import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint, LambdaCallback
+from lightning.pytorch.loggers import WandbLogger
 import dateutil as dt
 from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
 from sunerf.model.sunerf_lightning_classes import save_state, DensityTemperatureSuNeRFModule
@@ -79,7 +81,7 @@ if __name__ == '__main__':
                       logger=logger,
                       devices=N_GPUS,
                       accelerator='gpu' if N_GPUS >= 1 else None,
-                      strategy='dp' if N_GPUS > 1 else None,  # ddp breaks memory and wandb
+                      strategy='dp' if N_GPUS > 1 else 'auto',  # ddp breaks memory and wandb
                       num_sanity_val_steps=-1,  # validate all points to check the first image
                       val_check_interval=log_every_n_steps,
                       gradient_clip_val=0.5,

@@ -7,7 +7,7 @@ from astropy import units as u
 from astropy.visualization import ImageNormalize, AsinhStretch
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
-from pytorch_lightning import Callback
+from lightning.pytorch import Callback
 from skimage.metrics import structural_similarity
 
 from sunerf.data.date_util import unnormalize_datetime

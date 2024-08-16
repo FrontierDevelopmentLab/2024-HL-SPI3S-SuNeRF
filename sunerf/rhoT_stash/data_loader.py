@@ -11,7 +11,7 @@ import torch
 from astropy.io.fits import getheader
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-from pytorch_lightning import LightningDataModule
+from lightning.pytorch import LightningDataModule
 from sunpy.coordinates import frames
 from sunpy.map import Map
 from torch.utils.data import Dataset, DataLoader

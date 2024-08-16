@@ -19,9 +19,9 @@ class SphericalBessel(nn.Module):
         self.l_max = l_max
 
     def forward(self, r):
-        k = torch.linspace(1, self.k_max, self.k_max)
+        k = torch.linspace(1, self.k_max, self.k_max).to(r.device)
         r = r.to(torch.float64)[:,None]*k[None,:]
-        y = torch.zeros([self.l_max]+[s for s in r.shape], dtype=torch.float64)
+        y = torch.zeros([self.l_max]+[s for s in r.shape], dtype=torch.float64).to(r.device)
 
         lstart = self.l_max + int(torch.sqrt(torch.Tensor([10*self.l_max])))
         j2 = torch.zeros_like(r, dtype=torch.float64)
@@ -37,7 +37,7 @@ class SphericalBessel(nn.Module):
 
         true_j0 = torch.sinc(r/torch.pi)
         y = y * true_j0/y[0,...]
-        y = y.transpose(0,1)*torch.sqrt(torch.Tensor([2])/torch.pi)*k[None, None,:]
+        y = y.transpose(0,1)*torch.sqrt(torch.Tensor([2]).to(r.device)/torch.pi)*k[None, None,:]
         return y.to(torch.float32)
     
 
@@ -48,8 +48,8 @@ class FourierSeries(nn.Module):
         self.scale = scale
 
     def forward(self, t):
-        n = torch.linspace(1, self.n_max, self.n_max)
-        t = t.to(torch.float64)[:,None]
+        n = torch.linspace(1, self.n_max, self.n_max).to(t.device)
+        t = t[:,None]
         
         return torch.cat((t*0+1, torch.sin(t*n[None,:]*2*torch.pi/self.scale), torch.cos(t*n[None,:]*2*torch.pi/self.scale)), dim=-1).to(torch.float32)
     
@@ -61,8 +61,8 @@ class SphericalHarmonicsModule(nn.Module):
         self.sh = sct.SphericalHarmonics(l_max=self.l_max, normalized=True)
 
     def forward(self, xyz):
-        sh_values = self.sh.compute(xyz.to(torch.float64))
-        y = torch.zeros(sh_values.shape[0], self.l_max+1, 2*self.l_max+1)
+        sh_values = self.sh.compute(xyz)
+        y = torch.zeros(sh_values.shape[0], self.l_max+1, 2*self.l_max+1).to(xyz.device)
 
         n = 0
         for l in np.arange(0, self.l_max+1):
@@ -110,12 +110,12 @@ class OrthonormalTimeSphericalNeRF(nn.Module):
                                 ['0304', torch.tensor(15.0, dtype=torch.float32)],
                                 ['0335', torch.tensor(15.0, dtype=torch.float32)],
                                 ['1171', torch.tensor(15.0, dtype=torch.float32)],
-                                ['1195', torch.tensor(15.0, dtype=torch.float32)],
-                                ['1284', torch.tensor(15.0, dtype=torch.float32)],
+                                ['1193', torch.tensor(15.0, dtype=torch.float32)],
+                                ['1211', torch.tensor(15.0, dtype=torch.float32)],
                                 ['1304', torch.tensor(15.0, dtype=torch.float32)],
                                 ['2171', torch.tensor(15.0, dtype=torch.float32)],
-                                ['2195', torch.tensor(15.0, dtype=torch.float32)],
-                                ['2284', torch.tensor(15.0, dtype=torch.float32)],
+                                ['2193', torch.tensor(15.0, dtype=torch.float32)],
+                                ['2211', torch.tensor(15.0, dtype=torch.float32)],
                                 ['2304', torch.tensor(15.0, dtype=torch.float32)],
                         ])        
 
