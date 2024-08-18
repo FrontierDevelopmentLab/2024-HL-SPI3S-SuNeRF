@@ -253,7 +253,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         for wavelength in torch.unique(wavelengths):
             if wavelength > 0:
                 wavelength_key = str(int(wavelength.detach().cpu().numpy().item()))
-                absorption_coefficients[wavelengths==wavelength] = torch.float_power(10, -(nn.functional.relu(log_abs[wavelength_key]))).float() # removed base_abs
+                absorption_coefficients[wavelengths==wavelength] = nn.functional.relu(log_abs[wavelength_key]) # removed base_abs
 
         # Link to equation:
         # https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
@@ -261,8 +261,8 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         absorption_integral = torch.cumulative_trapezoid(absorption, x=z_vals[:,:,None], dim=1)
 
         emission = density.pow(2)*temperature_response
-        pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,1:,:]   #TODO: Check which emission indexes should go here
-        pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1) * vol_c * self.pixel_intensity_factor   # TODO: Check which z_vals indexes should go here
+        pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,0:-1,:]   #TODO: Check which emission indexes should go here
+        pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 0:-1, None], dim=1) * vol_c * self.pixel_intensity_factor   # TODO: Check which z_vals indexes should go here
 
         # set the weights to the intensity contributions
         weights = (nn.functional.relu(inferences[...,0]))
