@@ -1,3 +1,5 @@
+import lightning.pytorch as L
+L.seed_everything(7)
 import argparse
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
@@ -15,6 +17,7 @@ from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.sunerf_nerf_models import NeRF_DT
 from sunerf.model.kan_spherical_harmonics import OrthonormalTimeSphericalNeRF
 torch.set_float32_matmul_precision('high')
+L.seed_everything(7)
 
 
 # Main function that sets up and runs the training process
