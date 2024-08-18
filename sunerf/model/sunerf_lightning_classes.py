@@ -155,7 +155,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                  sampling_config=None, hierarchical_sampling_config=None,
                  model_config=None, 
                  temperature_response_normalization = {0: 1e17, 1: 1e-10, 2: 1e-10}, # Normalization for the AIA (0), EUVIA (1), and EUVIB (2) temperature response functions 
-                 **kwargs):
+                 use_aia_tresp=False, **kwargs):
 
         self.lambda_image = lambda_image
         self.lambda_regularization = lambda_regularization
@@ -165,7 +165,8 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                                                         sampling_config=sampling_config,
                                                         hierarchical_sampling_config=hierarchical_sampling_config,
                                                         model_config=model_config, model=model,
-                                                        temperature_response_normalization = temperature_response_normalization
+                                                        temperature_response_normalization = temperature_response_normalization,
+                                                        use_aia_tresp=use_aia_tresp
                                                         )
         rendering = nn.DataParallel(rendering)
 
@@ -216,8 +217,8 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                 'wavelength'], batch['instrument']
             rays_o, rays_d = rays[:, 0], rays[:, 1]
 
-            device = rays_o.device
-            self.rendering = self.rendering.to(device)
+            # device = rays_o.device
+            # self.rendering = self.rendering.to(device)
             outputs = self.rendering(rays_o, rays_d, time, wavelengths, instruments)
 
             distance = rays_o.pow(2).sum(-1).pow(0.5)
