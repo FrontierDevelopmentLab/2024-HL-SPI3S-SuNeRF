@@ -323,8 +323,8 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         absorption_integral = torch.cumulative_trapezoid(absorption, x=z_vals[:,:,None], dim=1)
 
         emission = density.pow(2)*temperature_response
-        pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,1:,:]   #TODO: Check which emission indexes should go here
-        pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1)
+        pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,0:-1,:]   #TODO: Check which emission indexes should go here
+        pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 0:-1, None], dim=1)
         for instrument in torch.unique(instruments):
             instrument_key = str(int(instrument.detach().cpu().numpy().item()))
             mask = instruments[:, 0, :] == instrument
