@@ -1,3 +1,5 @@
+import pytorch_lightning as pl
+pl.seed_everything(7)
 import argparse
 import os
 from torch import nn
@@ -13,6 +15,8 @@ from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.sunerf_nerf_models import NeRF_DT
 from sunerf.model.kan_spherical_harmonics import OrthonormalTimeSphericalNeRF
 torch.set_float32_matmul_precision('high')
+
+pl.seed_everything(7)
 
 
 # Main function that sets up and runs the training process

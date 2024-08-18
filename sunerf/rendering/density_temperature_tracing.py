@@ -315,7 +315,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                 if wavelength > 0:
                     wavelength_key = str(int(instrument.detach().cpu().numpy().item())) + str(int(wavelength.detach().cpu().numpy().item()))
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
-                    absorption_coefficients[mask] = torch.float_power(10, -(nn.functional.relu(log_abs[wavelength_key]))).float() # removed base_abs
+                    absorption_coefficients[mask] = nn.functional.relu(log_abs[wavelength_key]) # removed base_abs
 
         # Link to equation:
         # https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
