@@ -173,13 +173,13 @@ class NeRF_DT(NeRF):
         #                         ['2304', torch.tensor(19.4, dtype=torch.float32)],
         #                 ])
         
-        self.log_absortpion = nn.Parameter(torch.tensor([[20., 20.1, 20.2,],
-                                                         [20.01, 20.11, 20.21,],
-                                                         [20.02, 20.12, 20.22,],
-                                                         [20.03, 20.13, 20.23,],
-                                                         [20.04, 0.14, 0.24,],
-                                                         [20.05, 0.15, 0.25,],
-                                                         [20.06, 0.16, 0.26]], dtype=torch.float32, requires_grad=True)) 
+        self.log_absortpion = nn.Parameter(torch.tensor([[1.e-6, 1.e-6, 1.e-6,],
+                                                         [1.6-6, 1.e-6, 1.e-6,],
+                                                         [1.6-6, 1.e-6, 1.e-6,],
+                                                         [1.6-6, 1.e-6, 1.e-6,],
+                                                         [1.6-6, 1.e-6, 0.24,],
+                                                         [1.6-6, 1.e-6, 0.25,],
+                                                         [1.6-6, 1.e-6, 0.26]], dtype=torch.float32, requires_grad=True)) 
 
 
         # self.volumetric_constant = nn.ParameterDict([
@@ -187,7 +187,7 @@ class NeRF_DT(NeRF):
         #                         ['1', torch.tensor(1.0, dtype=torch.float32)],
         #                         ['2', torch.tensor(1.0, dtype=torch.float32)],
         #                 ])
-        self.volumetric_constant = nn.Parameter(torch.tensor([1, 1, 1,], dtype=torch.float32, requires_grad=True)) 
+        self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""

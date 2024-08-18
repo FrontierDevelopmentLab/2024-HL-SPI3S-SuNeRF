@@ -1,3 +1,5 @@
+import pytorch_lightning as pl
+pl.seed_everything(7)
 import argparse
 import os
 from torch import nn
@@ -12,7 +14,7 @@ from sunerf.model.sunerf_lightning_classes import save_state, DensityTemperature
 from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.sunerf_nerf_models import NeRF_DT
 torch.set_float32_matmul_precision('high')
-
+pl.seed_everything(7)
 
 # Main function that sets up and runs the training process
 if __name__ == '__main__':

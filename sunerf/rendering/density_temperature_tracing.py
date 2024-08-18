@@ -302,6 +302,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                 if wavelength > -1:
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     absorption_coefficients[mask] = torch.float_power(10, -(nn.functional.relu(log_abs[wavelength,instrument]))).float() # removed base_abs
+                    absorption_coefficients[mask] = nn.functional.relu(log_abs[wavelength,instrument]) # removed base_abs
 
         # Link to equation:
         # https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
@@ -309,8 +310,8 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         absorption_integral = torch.cumulative_trapezoid(absorption, x=z_vals[:,:,None], dim=1)
 
         emission = density.pow(2)*temperature_response
-        pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,1:,:]   #TODO: Check which emission indexes should go here
-        pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 1:, None], dim=1)
+        pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,0:-1,:]   #TODO: Check which emission indexes should go here
+        pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 0:-1, None], dim=1)
         for instrument in torch.unique(instruments):
             mask = instruments[:, 0, :] == instrument
             pixel_intensity[mask] = pixel_intensity[mask] * vol_c[instrument]   # TODO: Check which z_vals indexes should go here
