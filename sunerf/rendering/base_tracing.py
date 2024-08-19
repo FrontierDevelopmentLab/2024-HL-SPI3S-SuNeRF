@@ -40,6 +40,9 @@ class SuNeRFRendering(nn.Module):
         self.coarse_model = model(**model_config)
         self.fine_model = model(**model_config)
 
+    def regularization(self, distance, regularizing_quantity):
+        return torch.relu(distance[:,:,None] - 1.2 / self.Rs_per_ds) * (1 - regularizing_quantity)
+
     def forward(self, rays_o, rays_d, times, wavelengths=None):
         r"""_summary_
         		Compute forward pass through model.
@@ -89,7 +92,7 @@ class SuNeRFRendering(nn.Module):
         outputs['z_vals_hierarchical'] = z_hierarch
         outputs['fine_image'] = fine_out['image']
         image = fine_out['image']
-        absorption = fine_out['absorption']
+        absorption = fine_out['regularizing_quantity']
         weights = fine_out['weights']
 
         # compute image of absorption
@@ -98,7 +101,7 @@ class SuNeRFRendering(nn.Module):
         distance = query_points.pow(2).sum(-1).pow(0.5)
         height_map = (weights * distance).sum(-1)
         # penalize absorption past 1.2 solar radii
-        regularization = torch.relu(distance[:,:,None] - 1.2 / self.Rs_per_ds) * (1 - absorption)
+        regularization = self.regularization(distance, absorption)
 
         # Store outputs.
         outputs['image'] = image

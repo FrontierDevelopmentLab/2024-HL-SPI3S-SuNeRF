@@ -268,4 +268,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         weights = (nn.functional.relu(inferences[...,0]))
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
-        return {'image': pixel_intensity, 'weights': weights, 'absorption': absorption}
+        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': nn.functional.relu(inferences[...,0])} # density is the regularizing quantity
+    
+    def regularization(self, distance, regularizing_quantity):
+        return torch.relu(distance[:,:] - 1.25 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
