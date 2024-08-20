@@ -25,6 +25,7 @@ class BaseSuNeRFModule(LightningModule):
 
         self.validation_dataset_mapping = validation_dataset_mapping
         self.validation_outputs = {}
+        
 
         self.lr_config = {'start': 1e-4, 'end': 1e-5, 'iterations': 1e6} if lr_config is None else lr_config
 
@@ -53,6 +54,9 @@ class BaseSuNeRFModule(LightningModule):
     #         out_keys = outputs[0].keys()
     #         outputs = {k: torch.cat([o[k] for o in outputs]) for k in out_keys}
     #         self.validation_outputs[self.validation_dataset_mapping[i]] = outputs
+
+    def on_validation_epoch_end(self):
+        self.validation_outputs = {}  # reset validation outputs
 
     def on_load_checkpoint(self, checkpoint):
         state_dict = checkpoint['state_dict']
@@ -140,6 +144,7 @@ class EmissionSuNeRFModule(BaseSuNeRFModule):
             outputs = self.rendering(rays_o, rays_d, time)
 
             distance = rays_o.pow(2).sum(-1).pow(0.5)
+
             return {'target_image': target_image,
                     'fine_image': outputs['fine_image'],
                     'coarse_image': outputs['coarse_image'],
@@ -219,11 +224,20 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
             outputs = self.rendering(rays_o, rays_d, time, wavelengths, instruments)
 
             distance = rays_o.pow(2).sum(-1).pow(0.5)
-            return {'target_image': target_image,
-                    'fine_image': outputs['fine_image'],
-                    'coarse_image': outputs['coarse_image'],
-                    'height_map': outputs['height_map'],
-                    'absorption_map': outputs['absorption_map'],
-                    'z_vals_stratified': outputs['z_vals_stratified'],
-                    'z_vals_hierarchical': outputs['z_vals_hierarchical'],
-                    'distance': distance}
+
+            output_dict = {'target_image': target_image,
+                        'fine_image': outputs['fine_image'],
+                        'coarse_image': outputs['coarse_image'],
+                        'height_map': outputs['height_map'],
+                        'absorption_map': outputs['absorption_map'],
+                        'z_vals_stratified': outputs['z_vals_stratified'],
+                        'z_vals_hierarchical': outputs['z_vals_hierarchical'],
+                        'distance': distance}
+
+            if len(self.validation_outputs) == 0:
+                self.validation_outputs[self.validation_dataset_mapping[0]] = output_dict
+            else:
+                for key in self.validation_outputs[self.validation_dataset_mapping[0]].keys():
+                    self.validation_outputs[self.validation_dataset_mapping[0]][key] = torch.cat([self.validation_outputs[self.validation_dataset_mapping[0]][key], output_dict[key]])
+
+
