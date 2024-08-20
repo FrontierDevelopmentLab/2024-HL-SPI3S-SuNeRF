@@ -189,21 +189,21 @@ class OrthonormalTimeSphericalNeRF(nn.Module):
 
         # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
         self.log_absortpion = nn.ParameterDict([
-                                ['094',  torch.tensor(10.0, dtype=torch.float32)],
-                                ['0131', torch.tensor(15.0, dtype=torch.float32)],
-                                ['0171', torch.tensor(15.0, dtype=torch.float32)],
-                                ['0193', torch.tensor(15.0, dtype=torch.float32)],
-                                ['0211', torch.tensor(15.0, dtype=torch.float32)],
-                                ['0304', torch.tensor(15.0, dtype=torch.float32)],
-                                ['0335', torch.tensor(15.0, dtype=torch.float32)],
-                                ['1171', torch.tensor(15.0, dtype=torch.float32)],
-                                ['1193', torch.tensor(15.0, dtype=torch.float32)],
-                                ['1211', torch.tensor(15.0, dtype=torch.float32)],
-                                ['1304', torch.tensor(15.0, dtype=torch.float32)],
-                                ['2171', torch.tensor(15.0, dtype=torch.float32)],
-                                ['2193', torch.tensor(15.0, dtype=torch.float32)],
-                                ['2211', torch.tensor(15.0, dtype=torch.float32)],
-                                ['2304', torch.tensor(15.0, dtype=torch.float32)],
+                                ['094',  torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0131', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0171', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0193', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0211', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0304', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0335', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1171', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1195', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1284', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1304', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2171', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2195', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2284', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2304', torch.tensor(1.e-6, dtype=torch.float32)],
                         ])        
 
         self.volumetric_constant = nn.ParameterDict([
