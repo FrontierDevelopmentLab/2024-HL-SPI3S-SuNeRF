@@ -61,7 +61,7 @@ if __name__ == '__main__':
     # initialize SuNeRF model
     
     loss = nn.MSELoss()
-    model = OrthonormalTimeSphericalNeRF
+    model = NeRF_DT # OrthonormalTimeSphericalNeRF
     sunerf = DensityTemperatureSuNeRFModule(Rs_per_ds=data_module.Rs_per_ds, seconds_per_dt=data_module.seconds_per_dt,
                                             image_scaling_config=image_scaling_config, model=model, loss=loss,
                                             validation_dataset_mapping=data_module.validation_dataset_mapping,
