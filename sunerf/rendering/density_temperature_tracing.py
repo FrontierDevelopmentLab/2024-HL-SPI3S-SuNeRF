@@ -77,6 +77,7 @@ def prod_exponential_trapezoid(x, y):
     return prod_expo
 
 
+
 class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
     """ SuNeRF model for rendering filtergrams from density and temperature fields.
 
@@ -131,12 +132,9 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # Read the AIA temperature response functions
         aia_resp = read_genx("sunerf/data/aia_temp_resp.genx")
         self.response = {}
-        self.response[0] = {}
-        self.response[0]['wavelength_names'] = np.array([94, 131, 171, 193, 211, 304, 335])
-        self.response[1] = {}
-        self.response[1]['wavelength_names'] = np.array([171, 195, 284, 304])
-        self.response[2] = {}
-        self.response[2]['wavelength_names'] = np.array([171, 195, 284, 304])
+        self.response['0_wavelength_names'] = torch.Tensor([94, 131, 171, 193, 211, 304, 335])
+        self.response['1_wavelength_names'] = torch.Tensor([171, 195, 284, 304])
+        self.response['1_wavelength_names'] = torch.Tensor([171, 195, 284, 304])
 
         # Loop over the AIA temperature response functions
         for key in aia_resp.keys():
@@ -149,9 +147,8 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                 # Get the response and multiply by the typical AIA exposure time
                 response = aia_resp[f'A{wavelength}']['TRESP'] * aia_exp_time * temperature_response_normalization[0]
                 # Interpolate the temperature response function
-                self.response[0][wavelength] = {}
-                self.response[0][wavelength]['LOGTE'] = aia_resp[f'A{wavelength}']['LOGTE']
-                self.response[0][wavelength]['TRESP'] = aia_resp[f'A{wavelength}']['LOGTE']
+                self.response[f'0_{wavelength}_LOGTE'] = torch.Tensor(log_temperature)
+                self.response[f'0_{wavelength}_TRESP'] = torch.Tensor(response)
 
                 if use_aia_tresp:
                     wavelength_dict = wavelength
@@ -160,13 +157,11 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                     if wavelength == 211:
                         wavelength_dict = 284
 
-                    self.response[1][wavelength_dict] = {}
-                    self.response[1][wavelength_dict]['LOGTE'] = aia_resp[f'A{wavelength}']['LOGTE']
-                    self.response[1][wavelength_dict]['TRESP'] = aia_resp[f'A{wavelength}']['LOGTE']
+                    self.response[f'1_{wavelength_dict}_LOGTE'] = torch.Tensor(log_temperature)
+                    self.response[f'1_{wavelength_dict}_TRESP'] = torch.Tensor(response)
 
-                    self.response[2][wavelength_dict] = {}
-                    self.response[2][wavelength_dict]['LOGTE'] = aia_resp[f'A{wavelength}']['LOGTE']
-                    self.response[2][wavelength_dict]['TRESP'] = aia_resp[f'A{wavelength}']['LOGTE']                                                         
+                    self.response[f'2_{wavelength_dict}_LOGTE'] = torch.Tensor(log_temperature)
+                    self.response[f'2_{wavelength_dict}_TRESP'] = torch.Tensor(response)                                                       
 
         # Loop over the EUVIA temperature response functions
         euvia_resp = readsav('sunerf/data/euvi_response/ahead_sre_chianti2_fludra_mazzotta_001.geny')
@@ -178,9 +173,8 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             # Get the response and multiply by the typical AIA exposure time
             response = euvia_resp['p0'].item(0)[7][i, 0, :].astype(np.float32) * temperature_response_normalization[1]
             # Interpolate the temperature response function
-            self.response[1][wavelength] = {} 
-            self.response[1][wavelength_dict]['LOGTE'] = log_temperature
-            self.response[1][wavelength_dict]['TRESP'] = response
+            self.response[f'1_{wavelength}_LOGTE'] = torch.Tensor(log_temperature)
+            self.response[f'1_{wavelength}_TRESP'] = torch.Tensor(response)
 
         # Loop over the EUVIB temperature response functions
         euvib_resp = readsav('sunerf/data/euvi_response/behind_sre_chianti2_fludra_mazzotta_001.geny')
@@ -192,9 +186,10 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             # Get the response and multiply by the typical AIA exposure time
             response = euvia_resp['p0'].item(0)[7][i, 0, :].astype(np.float32) * temperature_response_normalization[2]
             # Interpolate the temperature response function
-            self.response[2][wavelength] = {} 
-            self.response[2][wavelength_dict]['LOGTE'] = log_temperature
-            self.response[2][wavelength_dict]['TRESP'] = response
+            self.response[f'2_{wavelength}_LOGTE'] = torch.Tensor(log_temperature)
+            self.response[f'2_{wavelength}_TRESP'] = torch.Tensor(response)
+
+        self.response = nn.ParameterDict(self.response) 
             
 
     def _render(self, model, query_points, rays_d, rays_o, z_vals, wavelengths, instruments):
@@ -294,29 +289,29 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # Get log log_density and expand to match size of wavelength channels
         # density = torch.float_power(10, nn.functional.relu(raw[0][...,0])+base_rho)
         # density = (nn.functional.relu(rho_T[...,0])*self.norm_rho).pow(1/self.pow_rho) + self.base_rho
-        density = torch.exp(nn.functional.relu(inferences[...,0]))
+        density = torch.exp(inferences[...,0])
         density = density[:, :, None].expand(density.shape[0], density.shape[1], wavelengths.shape[2])
 
         # Get log_temperature and expand to match size of wavelength channels
-        log_temperature = nn.functional.relu(inferences[...,1])
+        log_temperature = inferences[...,1]
         log_temperature = log_temperature[:, :, None].expand(log_temperature.shape[0], log_temperature.shape[1], wavelengths.shape[2])
 
-        temperature_response = torch.zeros_like(log_temperature).to(wavelengths.device)
+        temperature_response = torch.zeros_like(log_temperature)#.to(wavelengths.device)
         for instrument in torch.unique(instruments):
             instrument_key = int(instrument.detach().cpu().numpy().item())
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
                     wavelength_key = self.response[instrument_key]['wavelength_names'][int(wavelength.detach().cpu().numpy().item())]
-                    response = Interp1D(torch.from_numpy(self.response[instrument_key][wavelength_key]['LOGTE']).float().to(wavelengths.device),
-                                                     torch.from_numpy(self.response[instrument_key][wavelength_key]['TRESP']).float().to(wavelengths.device),
-                                                     method='linear', extrap=0)
+                    response = Interp1D(self.response[f'{instrument_key}_{wavelength_key}_LOGTE'],
+                                        self.response[f'{instrument_key}_{wavelength_key}_TRESP'],
+                                        method='linear', extrap=0)
                     tmp_response = response(log_temperature.flatten()).reshape(temperature_response.shape)
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     temperature_response[mask] = tmp_response[mask]
 
 
         # Get absorption coefficient
-        absorption_coefficients = torch.zeros_like(wavelengths).float().to(wavelengths.device)
+        absorption_coefficients = torch.zeros_like(wavelengths)#.to(wavelengths.device)
         for instrument in torch.unique(instruments):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
