@@ -242,6 +242,9 @@ class MultiThermalDataModule(BaseDataModule):
             s_map = Map(stack_path[0]).resample((imager_stack.shape[1], imager_stack.shape[1]) * u.pix)
         else:
             s_map = Map(stack_path[0])
+
+        if 't_obs' not in s_map.meta.keys():
+            s_map.meta['t_obs'] = s_map.meta['date-obs']
             
         time = normalize_datetime(s_map.date.datetime, seconds_per_dt, ref_time)
         pose = pose_spherical(-s_map.carrington_longitude.to(u.rad).value,
