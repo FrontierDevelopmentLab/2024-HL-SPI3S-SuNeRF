@@ -314,6 +314,15 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > 0:
                     wavelength_key = str(int(instrument.detach().cpu().numpy().item())) + str(int(wavelength.detach().cpu().numpy().item()))
+                    if wavelength_key == '1193':
+                        wavelength_key = '1195'
+                    if wavelength_key == '1211':
+                        wavelength_key = '1284'
+                    if wavelength_key == '2193':
+                        wavelength_key = '2195'
+                    if wavelength_key == '2211':
+                        wavelength_key = '2284'
+
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     absorption_coefficients[mask] = nn.functional.relu(log_abs[wavelength_key]) # removed base_abs
 
