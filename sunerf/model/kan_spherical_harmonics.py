@@ -231,3 +231,78 @@ class OrthonormalTimeSphericalNeRF(nn.Module):
             print('nan')
 
         return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+    
+
+
+
+
+class TimeSolidSphericalNeRF(nn.Module):
+    def __init__(self,
+                output_dim: int = 2,
+                l_max: int = 1, 
+                n_max: int = 1,
+                t_scale: float = 1,
+                r_scale: float = 1,
+                spline_weight_init_scale: float = 0.1, 
+                base_log_temperature: float = 5.0,
+                base_log_density: float = 10.0):
+        
+        super().__init__()
+
+        self.base_log_temperature = base_log_temperature
+        self.base_log_density = base_log_density
+
+        self.l_max = l_max
+        self.n_max = n_max
+        self.t_scale = t_scale
+        self.r_scale = r_scale
+
+        self.sh = SphericalHarmonicsModule(l_max=l_max)
+        self.t_fourier = FourierSeries(n_max=n_max, scale=t_scale)
+
+        self.spline_linear = SplineLinear((2*n_max+1)*(l_max+1)*(2*l_max+1), output_dim, spline_weight_init_scale)
+
+        # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
+        self.log_absortpion = nn.ParameterDict([
+                                ['094',  torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0131', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0171', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0193', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0211', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0304', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['0335', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1171', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1195', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1284', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['1304', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2171', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2195', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2284', torch.tensor(1.e-6, dtype=torch.float32)],
+                                ['2304', torch.tensor(1.e-6, dtype=torch.float32)],
+                        ])        
+
+        self.volumetric_constant = nn.ParameterDict([
+                                ['0', torch.tensor(1.0, dtype=torch.float32)],
+                                ['1', torch.tensor(1.0, dtype=torch.float32)],
+                                ['2', torch.tensor(1.0, dtype=torch.float32)],
+                        ])
+
+    def forward(self, x):
+        fourier = self.t_fourier(x[:, 3])
+        fourier[torch.isnan(fourier)] = 0
+        sh = self.sh(x[:, 0:3].contiguous())
+        k = torch.linspace(0, self.self.l_max+1, self.k_max+1)
+
+        sh[torch.isnan(sh)] = 0
+
+        x = self.spline_linear((sh[:,:,:, None]*fourier[:, None, None,:]).reshape(x.shape[0], -1))
+        
+        # Add base density
+        x[:, 0] = x[:, 0] + self.base_log_density
+        # Add base temperature
+        x[:, 1] = x[:, 1] + self.base_log_temperature
+
+        if x.isnan().any():
+            print('nan')
+
+        return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
