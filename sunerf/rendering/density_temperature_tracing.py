@@ -2,7 +2,8 @@ import torch
 from torch import nn
 from astropy import units as u
 from sunpy.io.special import read_genx
-from xitorch.interpolate import Interp1D
+# from xitorch.interpolate import Interp1D
+from sunerf.train.interpolate1d import Interp1d
 from sunerf.rendering.base_tracing import SuNeRFRendering, cumprod_exclusive
 from scipy.io import readsav
 import numpy as np
@@ -298,20 +299,20 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
         temperature_response = torch.zeros_like(log_temperature)#.to(wavelengths.device)
         for instrument in torch.unique(instruments):
-            instrument_key = int(instrument.detach().cpu().numpy().item())
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
-                    wavelength_key = self.response[instrument_key]['wavelength_names'][int(wavelength.detach().cpu().numpy().item())]
-                    response = Interp1D(self.response[f'{instrument_key}_{wavelength_key}_LOGTE'],
-                                        self.response[f'{instrument_key}_{wavelength_key}_TRESP'],
-                                        method='linear', extrap=0)
-                    tmp_response = response(log_temperature.flatten()).reshape(temperature_response.shape)
+                    wavelength_key = int(self.response[f'{int(instrument)}_wavelength_names'][int(wavelength)])
+                    tmp_response = Interp1d.apply(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
+                                        self.response[f'{int(instrument)}_{wavelength_key}_TRESP'],
+                                        log_temperature.flatten()).reshape(temperature_response.shape)
+                    
+                    # .reshape(temperature_response.shape)
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     temperature_response[mask] = tmp_response[mask]
 
 
         # Get absorption coefficient
-        absorption_coefficients = torch.zeros_like(wavelengths)#.to(wavelengths.device)
+        absorption_coefficients = torch.zeros_like(log_temperature)#.to(wavelengths.device)
         for instrument in torch.unique(instruments):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
