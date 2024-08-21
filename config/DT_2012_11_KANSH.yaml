@@ -1,12 +1,12 @@
-path_to_save: "/d0/amunozj/sunerf/checkpoint_kan"
-work_directory: '/d0/amunozj/sunerf/workspace_kan/batches'
+path_to_save: "/home/andres_munoz_j/checkpoints1"
+work_directory: '/home/andres_munoz_j/workspace1/batches'
 
 data:
-  data_path: "/d0/amunozj/hl24-aia_stereo-iti_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
-  debug: True
+  data_path: "/mnt/disks/data-sunerf/hl24-aia_stereo-iti_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
+  debug: False
   ref_time: "2012-10-31T00:00:00"
-  batch_size: 2048
-  target_resolution: 512
+  batch_size: 4096
+  target_resolution: 128
   aia_preprocessing: True
 
 logging:
@@ -14,18 +14,26 @@ logging:
   name: "aia_iti_kan"
 
 training:
-  log_every_n_steps: 700
+  log_every_n_steps: 2800
   epochs: 100
 
 model:
+  use_fine_model: False
+  lambda_image: 0.0001
+  lr_config:
+    start: 1.e-5
+    end: 1.0e-6
+    iterations: 5.0e+6
   temperature_response_normalization: {0: 1.e+20, 1: 1.e-8, 2: 1.e-8}
   use_aia_tresp: True
-  lambda_regularization: 1
+  lambda_regularization: 10.
   model_config:
-    k_max: 2 
-    l_max: 2 
-    n_max: 2
-    t_scale: 1    
+    # k_max: 2 
+    l_max: 10 
+    n_max: 10
+    t_scale: 1.0
+    r_scale: 1.0
+    spline_weight_init_scale: 0.01    
 
 
 #
