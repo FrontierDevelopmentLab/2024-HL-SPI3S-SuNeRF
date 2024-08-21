@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 from sunerf.data.loader.base_loader import BaseDataModule
 from sunerf.rendering.base_tracing import SuNeRFRendering
-from sunerf.rendering.emission import EmissionRadiativeTransfer
+from sunerf.rendering.emission_tracing import EmissionRadiativeTransfer
 from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
 from sunerf.train.scaling import ImageAsinhScaling
 
