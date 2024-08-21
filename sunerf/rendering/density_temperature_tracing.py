@@ -2,8 +2,7 @@ import torch
 from torch import nn
 from astropy import units as u
 from sunpy.io.special import read_genx
-# from xitorch.interpolate import Interp1D
-from sunerf.train.interpolate1d import Interp1d
+from xitorch.interpolate import Interp1D
 from sunerf.rendering.base_tracing import SuNeRFRendering, cumprod_exclusive
 from scipy.io import readsav
 import numpy as np
@@ -135,7 +134,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         self.response = {}
         self.response['0_wavelength_names'] = torch.Tensor([94, 131, 171, 193, 211, 304, 335])
         self.response['1_wavelength_names'] = torch.Tensor([171, 195, 284, 304])
-        self.response['1_wavelength_names'] = torch.Tensor([171, 195, 284, 304])
+        self.response['2_wavelength_names'] = torch.Tensor([171, 195, 284, 304])
 
         # Loop over the AIA temperature response functions
         for key in aia_resp.keys():
@@ -230,7 +229,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         state = model.forward(flat_query_points)
 
         # Save the model output and parameters in the state dictionary
-        state['inferences'] = state['inferences'].reshape(*query_points_shape, state['inferences'].shape[-1])#.to(flat_query_points.device)
+        state['inferences'] = state['inferences'].reshape(*query_points_shape, state['inferences'].shape[-1])
         state['z_vals'] = z_vals
         state['rays_d'] = rays_d
         state['wavelengths'] = wavelengths
@@ -297,22 +296,21 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         log_temperature = inferences[...,1]
         log_temperature = log_temperature[:, :, None].expand(log_temperature.shape[0], log_temperature.shape[1], wavelengths.shape[2])
 
-        temperature_response = torch.zeros_like(log_temperature)#.to(wavelengths.device)
+        temperature_response = torch.zeros_like(log_temperature)
         for instrument in torch.unique(instruments):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
                     wavelength_key = int(self.response[f'{int(instrument)}_wavelength_names'][int(wavelength)])
-                    tmp_response = Interp1d.apply(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
+                    response = Interp1D(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
                                         self.response[f'{int(instrument)}_{wavelength_key}_TRESP'],
-                                        log_temperature.flatten()).reshape(temperature_response.shape)
-                    
-                    # .reshape(temperature_response.shape)
+                                        method='linear', extrap=0)
+                    tmp_response = response(log_temperature.flatten()).reshape(temperature_response.shape)
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     temperature_response[mask] = tmp_response[mask]
 
 
         # Get absorption coefficient
-        absorption_coefficients = torch.zeros_like(log_temperature)#.to(wavelengths.device)
+        absorption_coefficients = torch.zeros_like(log_temperature)
         for instrument in torch.unique(instruments):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
