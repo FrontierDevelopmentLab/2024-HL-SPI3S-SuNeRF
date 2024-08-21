@@ -168,7 +168,6 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                                                         temperature_response_normalization = temperature_response_normalization,
                                                         use_aia_tresp=use_aia_tresp
                                                         )
-        rendering = nn.DataParallel(rendering)
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
