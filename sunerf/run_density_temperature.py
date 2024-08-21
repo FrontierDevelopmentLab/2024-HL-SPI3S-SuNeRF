@@ -16,6 +16,7 @@ from sunerf.model.sunerf_nerf_models import NeRF_DT
 torch.set_float32_matmul_precision('high')
 pl.seed_everything(7)
 
+
 # Main function that sets up and runs the training process
 if __name__ == '__main__':
     # Argument parser to handle command line inputs

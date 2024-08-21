@@ -51,4 +51,4 @@ class EmissionRadiativeTransfer(SuNeRFRendering):
         weights = emerging_intensity
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
-        return {'image': pixel_intensity, 'weights': weights, 'absorption': absorption}
+        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': absorption}
