@@ -7,9 +7,7 @@ from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, Stratif
 
 class SuNeRFRendering(nn.Module):
 
-    
-    
-    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, model_config=None): # TODO: adopt do be used for different models
+    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, use_fine_model=True, model_config=None): # TODO: adopt do be used for different models
         super().__init__()
         self.Rs_per_ds = Rs_per_ds
         # Rs_per_ds --> Solar Radii per distance
@@ -36,9 +34,11 @@ class SuNeRFRendering(nn.Module):
         else:
             raise ValueError(f'Unknown sampling type {hierarchical_sampling_type}')
 
+        self.use_fine_model = use_fine_model
         # setup coarse and fine models
         self.coarse_model = model(**model_config)
-        self.fine_model = model(**model_config)
+        if use_fine_model:
+            self.fine_model = model(**model_config)
 
     def regularization(self, distance, regularizing_quantity):
         return torch.relu(distance[:,:,None] - 1.2 / self.Rs_per_ds) * (1 - regularizing_quantity)
@@ -71,29 +71,36 @@ class SuNeRFRendering(nn.Module):
             coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths, instruments)
         outputs = {'z_vals_stratified': z_vals, 'coarse_image': coarse_out['image']}
 
+        outputs['z_vals_hierarchical'] = z_vals
+        outputs['fine_image'] = coarse_out['image']
+        image = coarse_out['image']
+        absorption = coarse_out['absorption']
+        weights = coarse_out['weights']        
+
         # Fine model pass.
-        # Apply hierarchical sampling for fine query points.
-        hierarchical_out = self.sampler_hierarchical(rays_o, rays_d, z_vals, coarse_out['weights'])
-        query_points, z_vals_combined, z_hierarch = (hierarchical_out['points'],
-                                                     hierarchical_out['z_vals'],
-                                                     hierarchical_out['new_z_samples'])
+        if self.use_fine_model:
+            # Apply hierarchical sampling for fine query points.
+            hierarchical_out = self.sampler_hierarchical(rays_o, rays_d, z_vals, coarse_out['weights'])
+            query_points, z_vals_combined, z_hierarch = (hierarchical_out['points'],
+                                                        hierarchical_out['z_vals'],
+                                                        hierarchical_out['new_z_samples'])
 
 
-        # add time to query points = expand to dimensions of query points and slice one dimension
-        exp_times = times[:, None].repeat(1, query_points.shape[1], 1)
-        query_points_time = torch.cat([query_points, exp_times], -1)
+            # add time to query points = expand to dimensions of query points and slice one dimension
+            exp_times = times[:, None].repeat(1, query_points.shape[1], 1)
+            query_points_time = torch.cat([query_points, exp_times], -1)
 
-        if wavelengths is None:
-            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined)
-        else:
-            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths, instruments)
+            if wavelengths is None:
+                fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined)
+            else:
+                fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths, instruments)
 
-        # Store outputs.
-        outputs['z_vals_hierarchical'] = z_hierarch
-        outputs['fine_image'] = fine_out['image']
-        image = fine_out['image']
-        absorption = fine_out['absorption']
-        weights = fine_out['weights']
+            # Store outputs.
+            outputs['z_vals_hierarchical'] = z_hierarch
+            outputs['fine_image'] = fine_out['image']
+            image = fine_out['image']
+            absorption = fine_out['absorption']
+            weights = fine_out['weights']
 
         # compute image of absorption
         absorption_map = (1 - absorption).sum(-1)
