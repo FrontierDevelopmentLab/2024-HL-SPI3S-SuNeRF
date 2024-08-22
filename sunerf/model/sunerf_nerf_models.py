@@ -153,40 +153,21 @@ class NeRF_DT(NeRF):
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
-
-        # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
-        self.log_absortpion = nn.ParameterDict([
-                                ['094',  torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['0131', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['0171', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['0193', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['0211', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['0304', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['0335', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['1171', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['1195', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['1284', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['1304', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['2171', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['2195', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['2284', torch.tensor(1.0e-6, dtype=torch.float32)],
-                                ['2304', torch.tensor(1.0e-6, dtype=torch.float32)],
-                        ])
         
-        # self.log_absortpion = nn.Parameter(torch.tensor([[20, 20, 20,],
-        #                                                  [20, 20, 20,],
-        #                                                  [20, 20, 20,],
-        #                                                  [20, 20, 20,],
-        #                                                  [20, 0, 0,],
-        #                                                  [20, 0, 0,],
-        #                                                  [20, 0, 0]], dtype=torch.float32, requires_grad=True)) 
+        # Tensor with the absorption coefficients of all wavelengths for all instruments.  \
+        # Currently it has three instruments: Position 0 (AIA), position 1 (EUVIA), and position 2 (EUVB)
+        # The other dimension is wavelengths.  AIA has 7 wavelengths and EUVI 4, hence the zeros.
+        self.absorption_coeff = nn.Parameter(torch.tensor([[1.e-6, 1.e-6, 1.e-6,],
+                                                           [1.6-6, 1.e-6, 1.e-6,],
+                                                           [1.6-6, 1.e-6, 1.e-6,],
+                                                           [1.6-6, 1.e-6, 1.e-6,],
+                                                           [1.6-6, 0, 0,],
+                                                           [1.6-6, 0, 0,],
+                                                           [1.6-6, 0, 0]], dtype=torch.float32, requires_grad=True)) 
 
-
-        self.volumetric_constant = nn.ParameterDict([
-                                ['0', torch.tensor(1.0, dtype=torch.float32)],
-                                ['1', torch.tensor(1.0, dtype=torch.float32)],
-                                ['2', torch.tensor(1.0, dtype=torch.float32)],
-                        ])
+        # Tensor with volumetric constant for all instruments.
+        #  Position 0 (AIA), position 1 (EUVIA), and position 2 (EUVB)
+        self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -206,7 +187,7 @@ class NeRF_DT(NeRF):
         # Add base temperature
         x[:, 1] = x[:, 1] + self.base_log_temperature
 
-        return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+        return {'RhoT': x, 'nerf_abs_coef': self.absorption_coeff , 'vol_c': self.volumetric_constant}
 
 # class NeRF_dens_temp(nn.Module):
 #   r"""

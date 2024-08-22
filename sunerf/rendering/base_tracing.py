@@ -74,7 +74,7 @@ class SuNeRFRendering(nn.Module):
         outputs['z_vals_hierarchical'] = z_vals
         outputs['fine_image'] = coarse_out['image']
         image = coarse_out['image']
-        absorption = coarse_out['absorption']
+        absorption = coarse_out['regularizing_quantity']
         weights = coarse_out['weights']        
 
         # Fine model pass.
@@ -99,7 +99,7 @@ class SuNeRFRendering(nn.Module):
             outputs['z_vals_hierarchical'] = z_hierarch
             outputs['fine_image'] = fine_out['image']
             image = fine_out['image']
-            absorption = fine_out['absorption']
+            absorption = fine_out['regularizing_quantity']
             weights = fine_out['weights']
 
         # compute image of absorption

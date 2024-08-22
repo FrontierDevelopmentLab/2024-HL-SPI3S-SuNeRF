@@ -1,9 +1,9 @@
 path_to_save: "/home/andres_munoz_j/checkpoints"
-work_directory: '/mnt/disks/andres_munoz_j/workspace/batches'
+work_directory: '/home/andres_munoz_j/workspace/batches'
 
 data:
-  data_path: "/home/andres_munoz_j/hl24-aia_stereo_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
-  debug: False
+  data_path: "/mnt/disks/data/sunerfs/hl24-aia_stereo_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
+  debug: True
   ref_time: "2012-10-31T00:00:00"
   batch_size: 4096
   target_resolution: 128
@@ -14,7 +14,7 @@ logging:
   name: "aia_stereo_128_regularization"
 
 training:
-  log_every_n_steps: 2500
+  log_every_n_steps: 10
   epochs: 100
 
 model:

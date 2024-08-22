@@ -2,8 +2,9 @@ import lightning.pytorch as L
 L.seed_everything(7)
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
+import wandb
 from torch import nn
 import torch
 import yaml
@@ -15,7 +16,7 @@ from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
 from sunerf.model.sunerf_lightning_classes import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
 from sunerf.model.sunerf_nerf_models import NeRF_DT
-from sunerf.model.kan_spherical_harmonics import OrthonormalTimeSphericalNeRF
+# from sunerf.model.kan_spherical_harmonics import OrthonormalTimeSphericalNeRF
 torch.set_float32_matmul_precision('high')
 L.seed_everything(7)
 
@@ -51,6 +52,7 @@ if __name__ == '__main__':
     ckpt_path = training_config['meta_path'] if 'meta_path' in training_config else 'last'
 
     # initialize logger
+    wandb.init(**logging_config)
     logger = WandbLogger(**logging_config, save_dir=working_dir)
 
     # initialize data module and model
@@ -76,7 +78,9 @@ if __name__ == '__main__':
 
     test_image_callback = TestMultiThermalImageCallback(data_module.validation_dataset_mapping[0],
                                             data_module.config['resolution'],
-                                            data_module.config['wavelengths'])
+                                            data_module.config['wavelengths'],
+                                            data_module.config['instrument'])
+    
     callbacks = [checkpoint_callback, save_callback, test_image_callback]
 
     N_GPUS = torch.cuda.device_count()
@@ -84,7 +88,7 @@ if __name__ == '__main__':
                       logger=logger,
                       devices=N_GPUS,
                       accelerator='gpu' if N_GPUS >= 1 else None,
-                      strategy='dp' if N_GPUS > 1 else 'auto',  # ddp breaks memory and wandb
+                      strategy='ddp_find_unused_parameters_true' if N_GPUS > 1 else 'auto',  # ddp breaks memory and wandb
                       num_sanity_val_steps=-1,  # validate all points to check the first image
                       val_check_interval=log_every_n_steps,
                       gradient_clip_val=0.5,

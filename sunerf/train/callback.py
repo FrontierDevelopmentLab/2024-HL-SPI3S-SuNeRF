@@ -23,7 +23,8 @@ class BaseCallback(Callback):
     def get_validation_outputs(self, pl_module):
         if self.name not in pl_module.validation_outputs:
             return None
-        outputs = pl_module.validation_outputs[self.name]
+        val_outputs = pl_module.all_gather(pl_module.validation_outputs)
+        outputs = val_outputs[self.name]
         return outputs
 
 
@@ -59,10 +60,18 @@ class TestImageCallback(BaseCallback):
 
 class TestMultiThermalImageCallback(BaseCallback):
 
-    def __init__(self, name, image_shape, wavelengths):
+    def __init__(self, name, image_shape, wavelengths, instrument):
         super().__init__(name)
         self.image_shape = image_shape
         self.wavelengths = wavelengths
+        if instrument == 0:
+            self.wavelength_cmap = np.array([94, 131, 171, 193, 211, 304, 335])
+        elif instrument == 1:
+            self.wavelength_cmap = np.array([171, 193, 211, 304])
+        elif instrument == 2:
+            self.wavelength_cmap = np.array([171, 193, 211, 304])
+        else:
+            self.wavelength_cmap = np.array([94, 131, 171, 193, 211, 304, 335])       
 
     def on_validation_epoch_end(self, trainer, pl_module):
 
@@ -71,7 +80,7 @@ class TestMultiThermalImageCallback(BaseCallback):
             return
 
         # reshape
-        outputs = {k: v.view(*self.image_shape, *v.shape[1:]).cpu().numpy() for k, v in outputs.items()}
+        outputs = {k: v.view(*self.image_shape, *v.shape[2:]).cpu().numpy() for k, v in outputs.items()}
 
         fine_image = outputs['fine_image']
         target_image = outputs['target_image']
@@ -79,6 +88,7 @@ class TestMultiThermalImageCallback(BaseCallback):
 
         plot_samples_multithermal(fine_image, coarse_image, outputs['height_map'], 
                      target_image, outputs['z_vals_stratified'], outputs['z_vals_hierarchical'], self.wavelengths,
+                     self.wavelength_cmap,
                      outputs['distance'].mean())
 
         val_loss = ((fine_image - target_image) ** 2).mean()
@@ -119,26 +129,21 @@ def plot_samples_multithermal(fine_image, coarse_image, height_map,
                  z_vals_stratified,
                  z_vals_hierach,
                  wavelengths,
+                 wavelength_cmap,
                  distance
                  ):
     # Log example images on wandb
     # # Plot example outputs
 
-    # Remove missing wavelengths
-    fine_image = fine_image[:,:,wavelengths>0]
-    coarse_image = coarse_image[:,:,wavelengths>0]
-    target_image = target_image[:,:,wavelengths>0]
-
-    wavelengths = wavelengths[wavelengths>0]
-
     n_channels = wavelengths.shape[0]
+    wavelength_cmap = wavelength_cmap[wavelengths]
 
     fig = plt.figure(figsize=2*np.array([n_channels+1, 3]), dpi=500)
     gs0 = fig.add_gridspec(3, n_channels+1, wspace=0, hspace=0, left=0, right=1, bottom=0, top=1)
 
     for i in np.arange(0,n_channels):
         normalize = ImageNormalize(vmin=np.min(target_image[..., i]), vmax=np.max(target_image[..., i]), stretch=AsinhStretch(0.005), clip=True)
-        cmap = plt.get_cmap(f'sdoaia{int(wavelengths[i])}').copy()
+        cmap = plt.get_cmap(f'sdoaia{int(wavelength_cmap[i])}').copy()
         ax = fig.add_subplot(gs0[0, i])
         # ax.imshow(testimg[..., i], cmap=cmap, norm=sdo_img_norm)
         ax.imshow(normalize(target_image[..., i]), cmap=cmap, norm=sdo_img_norm)

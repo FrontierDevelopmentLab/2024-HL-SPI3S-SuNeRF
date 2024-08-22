@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 from sunerf.data.loader.base_loader import BaseDataModule
 from sunerf.rendering.base_tracing import SuNeRFRendering
-from sunerf.rendering.emission import EmissionRadiativeTransfer
+from sunerf.rendering.emission_tracing import EmissionRadiativeTransfer
 from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
 from sunerf.train.scaling import ImageAsinhScaling
 
@@ -172,8 +172,8 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                                                         sampling_config=sampling_config,
                                                         hierarchical_sampling_config=hierarchical_sampling_config,
                                                         model_config=model_config, model=model,
-                                                        temperature_response_normalization = temperature_response_normalization,
-                                                        use_aia_tresp = use_aia_tresp
+                                                        temperature_response_normalization=temperature_response_normalization,
+                                                        use_aia_tresp=use_aia_tresp
                                                         )
 
         super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
