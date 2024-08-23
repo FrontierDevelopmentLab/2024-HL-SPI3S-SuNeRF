@@ -7,7 +7,7 @@ import numpy as np
 class SplineLinear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, init_scale: float = 0.1, **kw) -> None:
         self.init_scale = init_scale
-        super().__init__(in_features, out_features, bias=False, **kw)
+        super(SplineLinear, self).__init__(in_features, out_features, bias=False, **kw)
 
     def reset_parameters(self) -> None:
         nn.init.trunc_normal_(self.weight, mean=0, std=self.init_scale)
@@ -20,7 +20,7 @@ class RadialBasisFunction(nn.Module):
         num_grids: int = 8,
         denominator: float = None,  # larger denominators lead to smoother basis
     ):
-        super().__init__()
+        super(RadialBasisFunction, self).__init__()
         self.grid_min = grid_min
         self.grid_max = grid_max
         self.num_grids = num_grids
@@ -44,7 +44,7 @@ class FastKANLayer(nn.Module):
         base_activation = F.silu,
         spline_weight_init_scale: float = 0.1,
     ) -> None:
-        super().__init__()
+        super(FastKANLayer, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.layernorm = None
@@ -101,7 +101,7 @@ class FastKANLayer(nn.Module):
 
 class SphericalBessel(nn.Module):
     def __init__(self, k_max: int = 1, l_max: int = 0):
-        super().__init__()
+        super(SphericalBessel, self).__init__()
         self.k_max = k_max
         self.l_max = l_max
 
@@ -130,7 +130,7 @@ class SphericalBessel(nn.Module):
 
 class FourierSeries(nn.Module):
     def __init__(self, n_max: int = 1, scale = 1):
-        super().__init__()
+        super(FourierSeries, self).__init__()
         self.n_max = n_max
         self.scale = scale
 
@@ -143,7 +143,7 @@ class FourierSeries(nn.Module):
 
 class SphericalHarmonicsModule(nn.Module):
     def __init__(self, l_max: int = 1):
-        super().__init__()
+        super(SphericalHarmonicsModule, self).__init__()
         self.l_max = l_max
         self.sh = sct.SphericalHarmonics(l_max=self.l_max, normalized=True)
 
@@ -171,7 +171,7 @@ class OrthonormalTimeSphericalNeRF(nn.Module):
                 base_log_temperature: float = 5.0,
                 base_log_density: float = 10.0):
         
-        super().__init__()
+        super(OrthonormalTimeSphericalNeRF, self).__init__()
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
@@ -247,7 +247,7 @@ class TimeSolidSphericalNeRF(nn.Module):
                 base_log_temperature: float = 5.0,
                 base_log_density: float = 10.0):
         
-        super().__init__()
+        super(TimeSolidSphericalNeRF, self).__init__()
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density

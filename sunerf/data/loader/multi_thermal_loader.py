@@ -92,7 +92,7 @@ class MultiThermalDataModule(BaseDataModule):
         config = {'type': 'D_T', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,
                   'wavelengths': valid_wavelengths[0], 'resolution': valid_shapes,
                   'times': valid_times[0], 'instrument': valid_instruments[0]}
-        super().__init__({'tracing': train_dataset}, {'test_image': valid_dataset},
+        super(MultiThermalDataModule, self).__init__({'tracing': train_dataset}, {'test_image': valid_dataset},
                          start_time=times.min(), end_time=times.max(),
                          Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt, ref_time=ref_time,
                          module_config=config, **kwargs)

@@ -16,7 +16,7 @@ class BaseSuNeRFModule(LightningModule):
 
     def __init__(self, Rs_per_ds, seconds_per_dt, rendering: SuNeRFRendering,
                  validation_dataset_mapping, lr_config=None):
-        super().__init__()
+        super(BaseSuNeRFModule, self).__init__()
         self.validation_outputs = {}
 
         self.Rs_per_ds = Rs_per_ds
@@ -94,7 +94,7 @@ class EmissionSuNeRFModule(BaseSuNeRFModule):
                                               hierarchical_sampling_config=hierarchical_sampling_config,
                                               model_config=model_config)
 
-        super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
+        super(EmissionSuNeRFModule).__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
 
         self.image_scaling = ImageAsinhScaling(**image_scaling_config)
@@ -176,7 +176,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                                                         use_aia_tresp=use_aia_tresp
                                                         )
 
-        super().__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
+        super(DensityTemperatureSuNeRFModule, self).__init__(Rs_per_ds=Rs_per_ds, seconds_per_dt=seconds_per_dt,
                          rendering=rendering, **kwargs)
 
         self.loss = loss
@@ -240,4 +240,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                 for key in self.validation_outputs[self.validation_dataset_mapping[0]].keys():
                     self.validation_outputs[self.validation_dataset_mapping[0]][key] = torch.cat([self.validation_outputs[self.validation_dataset_mapping[0]][key], output_dict[key]])
 
-
+    # def on_after_backward(self):
+    #     for name, param in self.named_parameters():
+    #         if param.grad is None:
+    #             print(name)

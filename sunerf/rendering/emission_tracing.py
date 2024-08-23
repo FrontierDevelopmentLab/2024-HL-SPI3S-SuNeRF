@@ -9,7 +9,7 @@ class EmissionRadiativeTransfer(SuNeRFRendering):
     def __init__(self, model_config=None, **kwargs):
         model_config = {} if model_config is None else model_config
         model_config.update({'d_input': 4, 'd_output': 2, })  # x,y,z,t --> emission, absorption (required model config)
-        super().__init__(model_config=model_config, **kwargs)
+        super(EmissionRadiativeTransfer, self).__init__(model_config=model_config, **kwargs)
 
     def raw2outputs(self, raw: torch.Tensor, z_vals: torch.Tensor, rays_d: torch.Tensor, **kwargs):
         r"""

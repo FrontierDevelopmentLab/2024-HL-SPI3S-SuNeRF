@@ -22,7 +22,7 @@ class BaseDataModule(LightningDataModule):
                  Rs_per_ds, seconds_per_dt, ref_time,
                  module_config,
                  num_workers=None, **kwargs):
-        super().__init__()
+        super(BaseDataModule, self).__init__()
         self.training_datasets = training_datasets
         self.validation_datasets = validation_datasets
         self.datasets = {**self.training_datasets, **self.validation_datasets}

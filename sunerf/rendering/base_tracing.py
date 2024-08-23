@@ -8,7 +8,7 @@ from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, Stratif
 class SuNeRFRendering(nn.Module):
 
     def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, use_fine_model=True, model_config=None): # TODO: adopt do be used for different models
-        super().__init__()
+        super(SuNeRFRendering, self).__init__()
         self.Rs_per_ds = Rs_per_ds
         # Rs_per_ds --> Solar Radii per distance
 

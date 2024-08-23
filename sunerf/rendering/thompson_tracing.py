@@ -7,7 +7,7 @@ from sunerf.rendering.base_tracing import SuNeRFRendering
 class ThompsonScattering(SuNeRFRendering):
 
     def __init__(self, Rs_per_ds, **kwargs):
-        super().__init__(**kwargs)
+        super(ThompsonScattering, self).__init__(**kwargs)
         C_0 = 1  # (8.69e-7 * u.cm ** 2).to_value(u.R_sun ** 2) / (Rs_per_ds ** 2)
         self.register_buffer('limb_darkening_coeff', torch.tensor(0.63, dtype=torch.float32))
         self.register_buffer('C_0', torch.tensor(C_0, dtype=torch.float32))

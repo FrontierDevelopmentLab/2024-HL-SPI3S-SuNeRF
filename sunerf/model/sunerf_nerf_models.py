@@ -18,7 +18,7 @@ class NeRF(nn.Module):
             skip: Tuple[int] = (),
             encoding='positional'
     ):
-        super().__init__()
+        super(NeRF, self).__init__()
         self.d_input = d_input
         self.skip = skip
         self.act = Sine()
@@ -60,12 +60,12 @@ class NeRF(nn.Module):
 class EmissionModel(NeRF):
 
     def __init__(self, **kwargs):
-        super().__init__(d_input=4, d_output=2, **kwargs)
+        super(EmissionModel, self).__init__(d_input=4, d_output=2, **kwargs)
 
 
 class Sine(nn.Module):
     def __init__(self, w0: float = 1.):
-        super().__init__()
+        super(Sine, self).__init__()
         self.w0 = w0
 
     def forward(self, x):
@@ -75,7 +75,7 @@ class Sine(nn.Module):
 class TrainablePositionalEncoding(nn.Module):
 
     def __init__(self, d_input, n_freqs=20):
-        super().__init__()
+        super(TrainablePositionalEncoding, self).__init__()
         frequencies = torch.stack([torch.linspace(-3, 9, n_freqs, dtype=torch.float32) for _ in range(d_input)], -1)
         self.frequencies = nn.Parameter(frequencies[None, :, :], requires_grad=True)
         self.d_output = n_freqs * 2 * d_input
@@ -104,7 +104,7 @@ class PositionalEncoding(nn.Module):
         scale_factor: factor to adjust box size limit of 2pi (default 2; 4pi)
         log_space: use frequencies in powers of 2
         """
-        super().__init__()
+        super(PositionalEncoding, self).__init__()
         self.d_input = d_input
         self.n_freqs = n_freqs
         self.log_space = log_space
@@ -149,7 +149,7 @@ class NeRF_DT(NeRF):
             base_log_temperature: float = 5.0,
             base_log_density: float = 10.0,
     ):
-        super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
+        super(NeRF_DT, self).__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
