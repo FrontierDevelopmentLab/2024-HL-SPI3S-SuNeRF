@@ -4,7 +4,7 @@ import torch
 class SphericalSampler(torch.nn.Module):
 
     def __init__(self, Rs_per_ds, distance=2.0, n_samples=64, perturb=True):
-        super().__init__()
+        super(SphericalSampler, self).__init__()
         self.perturb = perturb
 
         self.register_buffer('distance', torch.tensor(distance / Rs_per_ds, dtype=torch.float32))
@@ -56,7 +56,7 @@ class SphericalSampler(torch.nn.Module):
 class StratifiedSampler(torch.nn.Module):
 
     def __init__(self, Rs_per_ds, distance=1.3, n_samples=64, perturb=True):
-        super().__init__()
+        super(StratifiedSampler, self).__init__()
         self.perturb = perturb
 
         self.register_buffer('distance', torch.tensor(distance / Rs_per_ds, dtype=torch.float32))
@@ -104,7 +104,7 @@ class StratifiedSampler(torch.nn.Module):
 class HierarchicalSampler(torch.nn.Module):
 
     def __init__(self, n_samples=128, perturb=False):
-        super().__init__()
+        super(HierarchicalSampler, self).__init__()
         self.n_samples = n_samples
         self.perturb = perturb
 
