@@ -260,7 +260,7 @@ class MultiThermalDataModule(BaseDataModule):
         all_rays = all_rays.reshape((-1, 2, 3))
 
         extended_stack = np.zeros((wavelengths.shape[0], imager_stack.shape[1], imager_stack.shape[2])).astype(np.float32)
-        wavelength_stack = extended_stack*0
+        wavelength_stack = extended_stack*0-1
 
         n = 0
         for i, wl in enumerate(wavelengths):
