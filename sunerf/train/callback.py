@@ -17,7 +17,7 @@ from sunerf.data.utils import sdo_img_norm
 class BaseCallback(Callback):
 
     def __init__(self, name):
-        super().__init__()
+        super(BaseCallback, self).__init__()
         self.name = name
 
     def get_validation_outputs(self, pl_module):
@@ -25,13 +25,29 @@ class BaseCallback(Callback):
             return None
         val_outputs = pl_module.all_gather(pl_module.validation_outputs)
         outputs = val_outputs[self.name]
+        # In case of multi-gpu, Ignore the outputs if the full validation set has not been assembled.
+        if len(outputs['coarse_image'].shape) == 3 and outputs['coarse_image'].shape[0]*outputs['coarse_image'].shape[1] != self.image_shape[0]*self.image_shape[1]:
+            outputs = None
+        # In case of multi-gpu, if the full validation set is ready, reshape the outputs to have the right dimension
+        elif len(outputs['coarse_image'].shape) == 3:
+            unstaggered_index = sum([[i, i+outputs['coarse_image'].shape[0]] for i in range(outputs['coarse_image'].shape[0])], [])
+            for key in outputs.keys():
+                if len(outputs[key].shape) == 3:
+                    outputs[key] = outputs[key].reshape(outputs[key].shape[0]*2, outputs[key].shape[1]//2, outputs[key].shape[2])
+                    outputs[key] = outputs[key][unstaggered_index, :, :]
+                    outputs[key] = outputs[key].reshape(-1, outputs[key].shape[-1])
+                else:
+                    outputs[key] = outputs[key].reshape(outputs[key].shape[0]*2, outputs[key].shape[1]//2)
+                    outputs[key] = outputs[key][unstaggered_index, :]
+                    outputs[key] = outputs[key].reshape(-1)
+
         return outputs
 
 
 class TestImageCallback(BaseCallback):
 
     def __init__(self, name, image_shape, cmap='gray'):
-        super().__init__(name)
+        super(TestImageCallback, self).__init__(name)
         self.image_shape = image_shape
         self.cmap = plt.get_cmap(cmap)
         self.normalize = ImageNormalize(vmin=0, vmax=1, stretch=AsinhStretch(0.005), clip=True)
@@ -61,7 +77,7 @@ class TestImageCallback(BaseCallback):
 class TestMultiThermalImageCallback(BaseCallback):
 
     def __init__(self, name, image_shape, wavelengths, instrument):
-        super().__init__(name)
+        super(TestMultiThermalImageCallback, self).__init__(name)
         self.image_shape = image_shape
         self.wavelengths = wavelengths
         if instrument == 0:
@@ -80,7 +96,7 @@ class TestMultiThermalImageCallback(BaseCallback):
             return
 
         # reshape
-        outputs = {k: v.view(*self.image_shape, *v.shape[2:]).cpu().numpy() for k, v in outputs.items()}
+        outputs = {k: v.view(*self.image_shape, *v.shape[1:]).cpu().numpy() for k, v in outputs.items()}
 
         fine_image = outputs['fine_image']
         target_image = outputs['target_image']
