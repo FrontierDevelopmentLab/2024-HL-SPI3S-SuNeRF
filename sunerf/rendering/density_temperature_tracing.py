@@ -123,7 +123,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
         # Initialize the model
         model_config = {} if model_config is None else model_config
-        super().__init__(model_config=model_config, **kwargs)
+        super(DensityTemperatureRadiativeTransfer, self).__init__(model_config=model_config, **kwargs)
 
         # Initialize the device
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
@@ -189,7 +189,10 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             self.response[f'2_{wavelength}_LOGTE'] = torch.Tensor(log_temperature)
             self.response[f'2_{wavelength}_TRESP'] = torch.Tensor(response)
 
-        self.response = nn.ParameterDict(self.response) 
+        self.response = nn.ParameterDict(self.response)
+        for key in self.response.keys():
+            self.response[key].requires_grad = False
+
             
 
     def _render(self, model, query_points, rays_d, rays_o, z_vals, wavelengths, instruments):
