@@ -8,7 +8,6 @@ channels:
 dependencies:
   - python=3.12
   - snakemake
-  - wandb
   - ipywidgets
   - pytorch::pytorch
   - pytorch::torchvision
@@ -24,3 +23,4 @@ dependencies:
   - pip:
     - itipy
     - xitorch
+    - wandb
