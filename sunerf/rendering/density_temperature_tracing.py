@@ -7,6 +7,45 @@ from sunerf.rendering.base_tracing import SuNeRFRendering, cumprod_exclusive
 from scipy.io import readsav
 import numpy as np
 
+
+def torch_1d_interp(
+    x: torch.Tensor,
+    xp: torch.Tensor,
+    fp: torch.Tensor,
+    left: float | None = None,
+    right: float | None = None,
+) -> torch.Tensor:
+    """One-dimensional linear interpolation for monotonically increasing sample points.
+
+    Returns the one-dimensional piecewise linear interpolant to a function with given discrete data points (xp, fp), evaluated at x.
+
+    Args:
+        x: The x-coordinates at which to evaluate the interpolated values.
+        xp: 1d sequence of floats. x-coordinates. Must be increasing
+        fp: 1d sequence of floats. y-coordinates. Must be same length as xp
+        left: Value to return for x < xp[0], default is fp[0]
+        right: Value to return for x > xp[-1], default is fp[-1]
+
+    Returns:
+        The interpolated values, same shape as x.
+    """
+    if left is None:
+        left = fp[0]
+
+    if right is None:
+        right = fp[-1]
+
+    i = torch.clip(torch.searchsorted(xp, x, right=True), 1, len(xp) - 1)
+
+    answer = torch.where(
+        x < xp[0],
+        left,
+        (fp[i - 1] * (xp[i] - x) + fp[i] * (x - xp[i - 1])) / (xp[i] - xp[i - 1]),
+    )
+    answer = torch.where(x > xp[-1], right, answer)
+    return answer
+
+
 def rectangular_integral(x, y, cumsum=False):
     '''
     Compute the rectangular rule integration of a function y(x) given x
@@ -301,10 +340,15 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
                     wavelength_key = int(self.response[f'{int(instrument)}_wavelength_names'][int(wavelength)])
-                    response = Interp1D(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
-                                        self.response[f'{int(instrument)}_{wavelength_key}_TRESP'],
-                                        method='linear', extrap=0)
-                    tmp_response = response(log_temperature.flatten()).reshape(temperature_response.shape)
+                    # response = Interp1D(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
+                    #                     self.response[f'{int(instrument)}_{wavelength_key}_TRESP'],
+                    #                     method='linear', extrap=0)
+                    # tmp_response = response(log_temperature.flatten()).unflatten(0,temperature_response.shape)
+
+                    tmp_response = torch_1d_interp(log_temperature.flatten(), 
+                                                   self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
+                                                   self.response[f'{int(instrument)}_{wavelength_key}_TRESP']).unflatten(0,temperature_response.shape)
+                    
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     temperature_response[mask] = tmp_response[mask]
 
@@ -337,4 +381,4 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': nn.functional.relu(inferences[...,0])} # density is the regularizing quantity
     
     def regularization(self, distance, regularizing_quantity):
-        return torch.relu(distance[:,:] - 1.25 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
+        return torch.relu(distance[:,:] - 1.2 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
