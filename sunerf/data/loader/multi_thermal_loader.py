@@ -156,7 +156,7 @@ class MultiThermalDataModule(BaseDataModule):
         max_channels_n = 0
         for path in data_source_paths:
             source = path.split('/')[-1]
-            wavelength_paths = [wv.decode("utf-8") for wv in next(os.walk(path))[1]]
+            wavelength_paths = [wv for wv in next(os.walk(path))[1]]
             wavelength_paths.sort()
             # Create wavelengths and substitute STEREO ITI conversions for the AIA equivalent
             wavelengths = np.sort(np.array([int(wl) for wl in wavelength_paths]))
@@ -247,6 +247,9 @@ class MultiThermalDataModule(BaseDataModule):
             s_map = Map(stack_path[0]).resample((imager_stack.shape[1], imager_stack.shape[1]) * u.pix)
         else:
             s_map = Map(stack_path[0])
+
+        if 't_obs' not in s_map.meta.keys():
+            s_map.meta['t_obs'] = s_map.meta['date-obs']            
             
         time = normalize_datetime(s_map.date.datetime, seconds_per_dt, ref_time)
         pose = pose_spherical(-s_map.carrington_longitude.to(u.rad).value,
