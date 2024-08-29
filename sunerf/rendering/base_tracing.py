@@ -7,7 +7,7 @@ from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, Stratif
 
 class SuNeRFRendering(nn.Module):
 
-    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, use_fine_model=True, model_config=None): # TODO: adopt do be used for different models
+    def __init__(self, Rs_per_ds, sampling_config=None, hierarchical_sampling_config=None, model=NeRF, model_config=None, use_fine_model=True): # TODO: adopt do be used for different models
         super(SuNeRFRendering, self).__init__()
         self.Rs_per_ds = Rs_per_ds
         # Rs_per_ds --> Solar Radii per distance
@@ -69,13 +69,7 @@ class SuNeRFRendering(nn.Module):
             coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals)
         else:
             coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths, instruments)
-        outputs = {'z_vals_stratified': z_vals, 'coarse_image': coarse_out['image']}
-
-        outputs['z_vals_hierarchical'] = z_vals
-        outputs['fine_image'] = coarse_out['image']
-        image = coarse_out['image']
-        absorption = coarse_out['regularizing_quantity']
-        weights = coarse_out['weights']        
+        outputs = {'z_vals_stratified': z_vals, 'coarse_image': coarse_out['image']}      
 
         # Fine model pass.
         if self.use_fine_model:
@@ -101,6 +95,13 @@ class SuNeRFRendering(nn.Module):
             image = fine_out['image']
             absorption = fine_out['regularizing_quantity']
             weights = fine_out['weights']
+
+        else:
+            outputs['z_vals_hierarchical'] = z_vals
+            outputs['fine_image'] = coarse_out['image']
+            image = coarse_out['image']
+            absorption = coarse_out['regularizing_quantity']
+            weights = coarse_out['weights']  
 
         # compute image of absorption
         absorption_map = (1 - absorption).sum(-1)

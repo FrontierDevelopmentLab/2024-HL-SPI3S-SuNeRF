@@ -341,14 +341,14 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
                     wavelength_key = int(self.response[f'{int(instrument)}_wavelength_names'][int(wavelength)])
-                    # response = Interp1D(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
-                    #                     self.response[f'{int(instrument)}_{wavelength_key}_TRESP'],
-                    #                     method='linear', extrap=0)
-                    # tmp_response = response(log_temperature.flatten()).unflatten(0,temperature_response.shape)
+                    response = Interp1D(self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
+                                        self.response[f'{int(instrument)}_{wavelength_key}_TRESP'],
+                                        method='linear', extrap=0)
+                    tmp_response = response(log_temperature.flatten()).unflatten(0,temperature_response.shape)
 
-                    tmp_response = torch_1d_interp(log_temperature.flatten(), 
-                                                   self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
-                                                   self.response[f'{int(instrument)}_{wavelength_key}_TRESP']).unflatten(0,temperature_response.shape)
+                    # tmp_response = torch_1d_interp(log_temperature.flatten(), 
+                    #                                self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
+                    #                                self.response[f'{int(instrument)}_{wavelength_key}_TRESP']).unflatten(0,temperature_response.shape)
 
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     temperature_response[mask] = tmp_response[mask]
@@ -375,10 +375,10 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             pixel_intensity[mask] = pixel_intensity[mask] * vol_c[instrument]   # TODO: Check which z_vals indexes should go here
 
         # set the weights to the intensity contributions
-        weights = (nn.functional.relu(RhoT[...,0]))
+        weights = RhoT[...,0] - torch.min(RhoT[...,0])
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
-        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': nn.functional.relu(RhoT[...,0])} # density is the regularizing quantity
+        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': torch.exp(RhoT[...,0])} # density is the regularizing quantity
     
     def regularization(self, distance, regularizing_quantity):
-        return torch.relu(distance[:,:] - 1.25 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
+        return torch.relu(distance[:,:] - 1.2 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
