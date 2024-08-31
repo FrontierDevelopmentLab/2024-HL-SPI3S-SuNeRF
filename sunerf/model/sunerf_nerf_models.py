@@ -54,7 +54,7 @@ class NeRF(nn.Module):
             #     x = torch.cat([x, x_input], dim=-1)
         x = self.out_layer(x)
 
-        return {'inferences':x}
+        return {'RhoT':x}
 
 
 class EmissionModel(NeRF):
@@ -182,7 +182,7 @@ class NeRF_DT(NeRF):
         # Add base temperature
         x[:, 1] = x[:, 1] + self.base_log_temperature
 
-        return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+        return {'RhoT': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
 
 # class NeRF_dens_temp(nn.Module):
 #   r"""
