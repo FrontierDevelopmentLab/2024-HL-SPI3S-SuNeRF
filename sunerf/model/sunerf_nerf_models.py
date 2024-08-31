@@ -147,20 +147,20 @@ class NeRF_DT(NeRF):
             skip: Tuple[int] = (),
             encoding='positional', 
             base_log_temperature: float = 5.0,
-            base_log_density: float = 10.0,
+            base_log_density: float = 8.0,
     ):
         super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
         
-        self.log_absortpion = nn.Parameter(torch.tensor([[1.e-6, 1.e-6, 1.e-6,],
-                                                         [1.6-6, 1.e-6, 1.e-6,],
-                                                         [1.6-6, 1.e-6, 1.e-6,],
-                                                         [1.6-6, 1.e-6, 1.e-6,],
-                                                         [1.6-6, 1.e-6, 0.24,],
-                                                         [1.6-6, 1.e-6, 0.25,],
-                                                         [1.6-6, 1.e-6, 0.26]], dtype=torch.float32, requires_grad=True)) 
+        self.log_absortpion = nn.Parameter(torch.tensor([[14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0]], dtype=torch.float32, requires_grad=True)) 
 
         self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
@@ -175,7 +175,7 @@ class NeRF_DT(NeRF):
             x = self.act(layer(x))
             # if i in self.skip:
             #     x = torch.cat([x, x_input], dim=-1)
-        x = self.out_layer(x)
+        x = torch.abs(self.out_layer(x))
 
         # Add base density
         x[:, 0] = x[:, 0] + self.base_log_density
