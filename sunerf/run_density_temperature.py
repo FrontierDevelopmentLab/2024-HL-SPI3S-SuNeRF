@@ -2,6 +2,8 @@ import pytorch_lightning as pl
 pl.seed_everything(7)
 import argparse
 import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+
 from torch import nn
 import torch
 import yaml
