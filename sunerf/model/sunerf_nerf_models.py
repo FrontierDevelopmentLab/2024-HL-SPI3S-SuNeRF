@@ -54,7 +54,7 @@ class NeRF(nn.Module):
             #     x = torch.cat([x, x_input], dim=-1)
         x = self.out_layer(x)
 
-        return {'inferences':x}
+        return {'RhoT':x}
 
 
 class EmissionModel(NeRF):
@@ -147,23 +147,20 @@ class NeRF_DT(NeRF):
             skip: Tuple[int] = (),
             encoding='positional', 
             base_log_temperature: float = 5.0,
-            base_log_density: float = 10.0,
+            base_log_density: float = 8.0,
     ):
         super(NeRF_DT, self).__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
         
-        # Tensor with the absorption coefficients of all wavelengths for all instruments.  \
-        # Currently it has three instruments: Position 0 (AIA), position 1 (EUVIA), and position 2 (EUVB)
-        # The other dimension is wavelengths.  AIA has 7 wavelengths and EUVI 4, hence the zeros.
-        self.absorption_coeff = nn.Parameter(torch.tensor([[1.e-6, 1.e-6, 1.e-6,],
-                                                           [1.6-6, 1.e-6, 1.e-6,],
-                                                           [1.6-6, 1.e-6, 1.e-6,],
-                                                           [1.6-6, 1.e-6, 1.e-6,],
-                                                           [1.6-6, 0, 0,],
-                                                           [1.6-6, 0, 0,],
-                                                           [1.6-6, 0, 0]], dtype=torch.float32, requires_grad=True)) 
+        self.log_absortpion = nn.Parameter(torch.tensor([[14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0]], dtype=torch.float32, requires_grad=True)) 
 
         # Tensor with volumetric constant for all instruments.
         #  Position 0 (AIA), position 1 (EUVIA), and position 2 (EUVB)
@@ -180,14 +177,14 @@ class NeRF_DT(NeRF):
             x = self.act(layer(x))
             # if i in self.skip:
             #     x = torch.cat([x, x_input], dim=-1)
-        x = self.out_layer(x)
+        x = torch.abs(self.out_layer(x))
 
         # Add base density
         x[:, 0] = x[:, 0] + self.base_log_density
         # Add base temperature
         x[:, 1] = x[:, 1] + self.base_log_temperature
 
-        return {'RhoT': x, 'nerf_abs_coef': self.absorption_coeff , 'vol_c': self.volumetric_constant}
+        return {'RhoT': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
 
 # class NeRF_dens_temp(nn.Module):
 #   r"""

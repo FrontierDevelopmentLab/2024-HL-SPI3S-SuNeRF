@@ -228,8 +228,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
 
         self.response = nn.ParameterDict(self.response)
         for key in self.response.keys():
-            self.response[key].requires_grad = False
-
+            self.response[key].requires_grad = False        
             
 
     def _render(self, model, query_points, rays_d, rays_o, z_vals, wavelengths, instruments):
@@ -281,7 +280,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # out contains the rendered filtergrams, the weights of the filtergrams and the absorption coefficient
         return out
     
-    def raw2outputs(self, RhoT: torch.Tensor, nerf_abs_coef: torch.Tensor, vol_c: torch.Tensor, z_vals: torch.Tensor,
+    def raw2outputs(self, RhoT: torch.Tensor, log_abs: torch.Tensor, vol_c: torch.Tensor, z_vals: torch.Tensor,
                     rays_d: torch.Tensor, wavelengths: torch.Tensor, instruments: torch.Tensor):
         """ Convert the raw NeRF output into emission and absorption.
 
@@ -349,7 +348,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
                     # tmp_response = torch_1d_interp(log_temperature.flatten(), 
                     #                                self.response[f'{int(instrument)}_{wavelength_key}_LOGTE'],
                     #                                self.response[f'{int(instrument)}_{wavelength_key}_TRESP']).unflatten(0,temperature_response.shape)
-
+                    
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
                     temperature_response[mask] = tmp_response[mask]
 
@@ -360,7 +359,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             for wavelength in torch.unique(wavelengths[instruments==instrument]):
                 if wavelength > -1:
                     mask = torch.logical_and(wavelengths==wavelength, instruments==instrument)
-                    absorption_coefficients[mask] = nn.functional.relu(nerf_abs_coef[wavelength,instrument]) # removed base_abs
+                    absorption_coefficients[mask] = torch.exp(-log_abs[wavelength,instrument]) # removed base_abs
 
         # Link to equation:
         # https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
@@ -375,10 +374,10 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
             pixel_intensity[mask] = pixel_intensity[mask] * vol_c[instrument]   # TODO: Check which z_vals indexes should go here
 
         # set the weights to the intensity contributions
-        weights = RhoT[...,0] - torch.min(RhoT[...,0])
+        weights = torch.cat([pixel_intensity_term[:,0,:][:,None,:], pixel_intensity_term], dim=1).mean(dim=2)
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
-        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': torch.exp(RhoT[...,0])} # density is the regularizing quantity
+        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': torch.relu(RhoT[...,0])} # density is the regularizing quantity
     
     def regularization(self, distance, regularizing_quantity):
         return torch.relu(distance[:,:] - 1.2 / self.Rs_per_ds) * torch.relu(regularizing_quantity)

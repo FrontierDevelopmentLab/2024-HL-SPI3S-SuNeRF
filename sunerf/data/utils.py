@@ -69,6 +69,8 @@ def loadMap(file_path, resolution:int=None, map_reproject:bool=False, calibratio
         s_map = s_map.resample((resolution, resolution) * u.pix)
     s_map.meta['t_obs'] = s_map.meta['date-obs'] 
 
+    s_map.meta['t_obs'] = s_map.meta['date-obs']
+
     return s_map
 
 
