@@ -99,6 +99,6 @@ class SimpleStar(nn.Module):
         temp = torch.log10(temp)
 
         # Output density, temperature, absortpion and volumetric constant
-        return {'inferences': torch.stack((rho,temp), dim=-1), 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+        return {'RhoT': torch.stack((rho,temp), dim=-1), 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
 
 

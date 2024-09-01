@@ -2,6 +2,8 @@ import pytorch_lightning as pl
 pl.seed_everything(7)
 import argparse
 import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+
 from torch import nn
 import torch
 import yaml
@@ -10,9 +12,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 import dateutil as dt
 from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
-from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
+from sunerf.model.sunerf_lightning_classes import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
-from sunerf.model.model import NeRF_DT
+from sunerf.model.sunerf_nerf_models import NeRF_DT
 torch.set_float32_matmul_precision('high')
 pl.seed_everything(7)
 
@@ -76,7 +78,8 @@ if __name__ == '__main__':
 
     test_image_callback = TestMultiThermalImageCallback(data_module.validation_dataset_mapping[0],
                                             data_module.config['resolution'],
-                                            data_module.config['wavelengths'])
+                                            data_module.config['wavelengths'],
+                                            data_module.config['instrument'])
     callbacks = [checkpoint_callback, save_callback, test_image_callback]
 
     N_GPUS = torch.cuda.device_count()

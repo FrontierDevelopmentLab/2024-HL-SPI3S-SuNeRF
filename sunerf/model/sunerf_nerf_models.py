@@ -54,7 +54,7 @@ class NeRF(nn.Module):
             #     x = torch.cat([x, x_input], dim=-1)
         x = self.out_layer(x)
 
-        return {'inferences':x}
+        return {'RhoT':x}
 
 
 class EmissionModel(NeRF):
@@ -147,24 +147,22 @@ class NeRF_DT(NeRF):
             skip: Tuple[int] = (),
             encoding='positional', 
             base_log_temperature: float = 5.0,
-            base_log_density: float = 10.0,
+            base_log_density: float = 8.0,
     ):
         super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
+        
+        self.log_absortpion = nn.Parameter(torch.tensor([[14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0],
+                                                         [14.0, 14.0, 14.0]], dtype=torch.float32, requires_grad=True)) 
 
-        self.log_absortpion = nn.ParameterDict([
-                                ['94',  torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['131', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['171', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['193', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['211', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['304', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['335', torch.tensor(1.e-6, dtype=torch.float32)]
-                        ])
-
-        self.volumetric_constant = nn.Parameter(torch.tensor(1.0, dtype=torch.float32, requires_grad=True))
+        self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -177,14 +175,14 @@ class NeRF_DT(NeRF):
             x = self.act(layer(x))
             # if i in self.skip:
             #     x = torch.cat([x, x_input], dim=-1)
-        x = self.out_layer(x)
+        x = torch.abs(self.out_layer(x))
 
         # Add base density
         x[:, 0] = x[:, 0] + self.base_log_density
         # Add base temperature
         x[:, 1] = x[:, 1] + self.base_log_temperature
 
-        return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+        return {'RhoT': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
 
 # class NeRF_dens_temp(nn.Module):
 #   r"""

@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import datetime
-from sunerf.model.model import NeRF
+from sunerf.model.sunerf_nerf_models import NeRF
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler
 
@@ -40,7 +40,7 @@ class SuNeRFRendering(nn.Module):
         self.coarse_model = model(**model_config)
         self.fine_model = model(**model_config)
 
-    def forward(self, rays_o, rays_d, times, wavelengths=None):
+    def forward(self, rays_o, rays_d, times, wavelengths=None, instruments=None):
         r"""_summary_
         		Compute forward pass through model.
 
@@ -65,7 +65,7 @@ class SuNeRFRendering(nn.Module):
         if wavelengths is None:
             coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals)
         else:
-            coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths)
+            coarse_out = self._render(self.coarse_model, query_points_time, rays_d, rays_o, z_vals, wavelengths, instruments)
         outputs = {'z_vals_stratified': z_vals, 'coarse_image': coarse_out['image']}
 
         # Fine model pass.
@@ -83,13 +83,13 @@ class SuNeRFRendering(nn.Module):
         if wavelengths is None:
             fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined)
         else:
-            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths)
+            fine_out = self._render(self.fine_model, query_points_time, rays_d, rays_o, z_vals_combined, wavelengths, instruments)
 
         # Store outputs.
         outputs['z_vals_hierarchical'] = z_hierarch
         outputs['fine_image'] = fine_out['image']
         image = fine_out['image']
-        absorption = fine_out['absorption']
+        absorption = fine_out['regularizing_quantity']
         weights = fine_out['weights']
 
         # compute image of absorption
@@ -98,7 +98,7 @@ class SuNeRFRendering(nn.Module):
         distance = query_points.pow(2).sum(-1).pow(0.5)
         height_map = (weights * distance).sum(-1)
         # penalize absorption past 1.2 solar radii
-        regularization = torch.relu(distance[:,:,None] - 1.2 / self.Rs_per_ds) * (1 - absorption)
+        regularization = self.regularization(distance, absorption)
 
         # Store outputs.
         outputs['image'] = image

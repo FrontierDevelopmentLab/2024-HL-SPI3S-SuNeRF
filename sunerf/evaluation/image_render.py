@@ -9,7 +9,7 @@ from sunpy.map import Map
 from sunpy.map.header_helper import get_observer_meta
 from tqdm import tqdm
 # For density and temperature rendering
-from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
+from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
