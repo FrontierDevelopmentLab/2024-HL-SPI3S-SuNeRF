@@ -1,35 +1,35 @@
-path_to_save: "/home/andres_munoz_j/checkpoints1"
-work_directory: '/home/andres_munoz_j/workspace1/batches'
+path_to_save: "/d0/amunozj/sunerf/aia_iti_512_sh_rscale"
+work_directory: '/d0/amunozj/sunerf/aia_iti_512_sh_rscale/batches'
 
 data:
-  data_path: "/mnt/disks/data-sunerf/hl24-aia_stereo-iti_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
+  data_path: "/d0/amunozj/hl24-aia_stereo-iti_2012_11"  # gs://spi3s_nerf_bucket/2012_11_aia_stereo/hl24-aia_stereo_2012_11
   debug: False
   ref_time: "2012-10-31T00:00:00"
-  batch_size: 4096
-  target_resolution: 128
+  batch_size: 8192
+  target_resolution: 512
   aia_preprocessing: True
+  seconds_per_dt: 864000
 
 logging:
   project: "2024-SPI3S-3DSun"
-  name: "aia_iti_kan"
+  name: "aia_iti_512_sh_rscale"
 
 training:
-  log_every_n_steps: 2800
+  log_every_n_steps: 4000
   epochs: 100
 
 model:
   use_fine_model: False
-  lambda_image: 0.0001
+  lambda_image: 0.001
   lr_config:
-    start: 1.e-5
-    end: 1.0e-6
-    iterations: 5.0e+6
+    # start: 1.e-5
+    # end: 1.0e-6
+    # iterations: 5.0e+6
   temperature_response_normalization: {0: 1.e+20, 1: 1.e-8, 2: 1.e-8}
   use_aia_tresp: True
-  lambda_regularization: 10.
   model_config:
     # k_max: 2 
-    l_max: 10 
+    l_max: 20 
     n_max: 10
     t_scale: 1.0
     r_scale: 1.0
