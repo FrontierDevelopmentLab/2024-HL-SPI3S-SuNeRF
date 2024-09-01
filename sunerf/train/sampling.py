@@ -60,7 +60,8 @@ class StratifiedSampler(torch.nn.Module):
         self.perturb = perturb
 
         self.register_buffer('distance', torch.tensor(distance / Rs_per_ds, dtype=torch.float32))
-        self.register_buffer('solar_R', torch.tensor(1 / Rs_per_ds, dtype=torch.float32))
+        self.register_buffer('solar_R', torch.tensor(1.00 / Rs_per_ds, dtype=torch.float32))
+        self.Rs_per_ds = Rs_per_ds
 
         t_vals = torch.linspace(0., 1., n_samples)[None]
         self.register_buffer('t_vals', torch.tensor(t_vals, dtype=torch.float32))

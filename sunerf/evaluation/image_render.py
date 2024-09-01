@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sunpy.visualization.colormaps as cm
 from sunpy.map import Map
+from sunpy.coordinates import frames, sun
 from sunpy.map.header_helper import get_observer_meta
 from tqdm import tqdm
 # For density and temperature rendering
@@ -18,6 +19,13 @@ import glob
 import yaml
 import torch
 from sunerf.model.model import NeRF_DT
+import psutil
+
+
+def log_memory_usage(stage):
+    process = psutil.Process()
+    mem_info = process.memory_info()
+    print(f"[{stage}] Memory Usage: {mem_info.rss / 1024 ** 2:.2f} MB")
 
 
 class ImageRender:
@@ -150,7 +158,7 @@ class ImageRender:
         s_map = None
 
 
-def load_observer_meta(path_to_file):
+def load_observer_meta(path_to_file, hg_carrington=True):
     """ Main function to load observer data
     
     Parameters
@@ -174,11 +182,22 @@ def load_observer_meta(path_to_file):
     # Extract observation time and satellite position when AIA produced image
     sat_coords = s_map.observer_coordinate 
     coord_meta = get_observer_meta(sat_coords)
-    lat = coord_meta['hglt_obs']  # latitude [degree]
-    lon = coord_meta['hgln_obs']  # longitude [degree]
-    dist = coord_meta['dsun_obs']  # instrument distance in units [m]
-    # Convert into expected units/coordinate system for the render
-    dist = dist*u.m.to(u.au)  # conversion to [AU] with astropy
+
+    # Choice of observer coordinates (Heliographic Carrington or Heliographic Stonyhurst)
+    # Extract observer data in heliographic Stonyhurst coordinates
+    sat_coords = sat_coords.transform_to(frames.HeliographicStonyhurst(obstime=sat_coords.obstime))
+    if hg_carrington:
+        # Extract observer data in heliographic Carrington coordinates
+        sat_coords = sat_coords.transform_to(frames.HeliographicCarrington(obstime=sat_coords.obstime,
+                                                                           observer=sat_coords))
+
+    # Extract observer data
+    lat = sat_coords.lat.to_value(u.deg)  # latitude [degree]
+    lon = sat_coords.lon.to_value(u.deg)  # longitude [degree]
+    dist = sat_coords.radius.to_value(u.au)  # instrument distance in units [AU]
+    # print(f"Lat: {lat}, Lon: {lon}, Dist: {dist}")
+    # print(f"Lat: {coord_meta['hglt_obs']}, Lon: {coord_meta['hgln_obs']}, Dist: {coord_meta['dsun_obs']*u.m.to(u.au)}")
+    # breakpoint()
     # Extract observation time -- first condition for SDO (t_obs), second condition for STEREO (date-obs)
     time = s_map.meta['t_obs'] if ('t_obs' in s_map.meta) else s_map.meta['date-obs']
 
@@ -226,10 +245,10 @@ if __name__ == '__main__':
     observer_ref = config['observer_ref']
     batch_size = config['batch_size']
     model = config['model']
-    enforce_solar_rotation = config['enforce_solar_rotation']
+    sampling_config = config['sampling_config']
     
     # Find files and metadata for each observer
-    observer_files = [sorted(glob.glob(f"{dir}/*.fits")) for dir in observer_dir]
+    observer_files = [sorted(glob.glob(f"{dir}/*.fits"))[0:1] for dir in observer_dir]
     observer_meta = [[load_observer_meta(filepath) for filepath in tqdm(files)] for files in observer_files]
    
     # Reference map for module from the first file
@@ -307,26 +326,20 @@ if __name__ == '__main__':
             
         else:
             rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
-                                                            model_config=model_config)
-            loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+                                                            model_config=model_config, 
+                                                            sampling_config=sampling_config['sampling_config'].copy(), 
+                                                            hierarchical_sampling_config=sampling_config['hierarchical_sampling_config'].copy())
+            loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map, serial=True)
             
         render = ImageRender(render_path)
-        # resolution = (observer_res[j], observer_res[j])*u.pix
-        resolution = (256, 256)*u.pix
+        resolution = (observer_res[j], observer_res[j])*u.pix
+
+        
         # Loop over observer files
         for i, (lat, lon, d, time) in tqdm(enumerate(observer_meta[j]), total=len(observer_meta[j])):
             # Convert time to seconds (fractional) 0 to 1 value that is expected by MHD
             t = ((datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
                   s_map_t).total_seconds()+t_shift*dt)/((t_f-t_i)*dt)
-            
-            if enforce_solar_rotation:
-            # Elapsed time - difference between time from beginning of render to current time of rendering
-                elapsed_t = (datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
-                    s_map_t).total_seconds()
-                # Elapsed rotation - current rotation of the sun based on elapsed time in images
-                # 360 days in 25.38 days in 24 hours and 3600 sec 
-                elapsed_rotation = 360/(25.38*24*3600)*elapsed_t
-                lon = lon - elapsed_rotation
 
             if model == 'SuNeRF':
                 wl = sunerf_model['data_config']['wavelengths']
@@ -352,4 +365,6 @@ if __name__ == '__main__':
 
             # Clear outputs
             outputs = None
-                    
+            log_memory_usage("End loop - Clear outputs")
+            breakpoint()
+        

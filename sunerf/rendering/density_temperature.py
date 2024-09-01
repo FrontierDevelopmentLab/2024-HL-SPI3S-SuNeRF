@@ -234,11 +234,11 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         # Get log log_density and expand to match size of wavelength channels
         # density = torch.float_power(10, nn.functional.relu(raw[0][...,0])+base_rho)
         # density = (nn.functional.relu(rho_T[...,0])*self.norm_rho).pow(1/self.pow_rho) + self.base_rho
-        density = torch.exp(nn.functional.relu(inferences[...,0]))
+        density = torch.exp(inferences[...,0])
         density = density[:, :, None].expand(density.shape[0], density.shape[1], wavelengths.shape[2])
 
         # Get log_temperature and expand to match size of wavelength channels
-        log_temperature = nn.functional.relu(inferences[...,1])
+        log_temperature = inferences[...,1]
         log_temperature = log_temperature[:, :, None].expand(log_temperature.shape[0], log_temperature.shape[1], wavelengths.shape[2])
 
         temperature_response = torch.zeros_like(log_temperature)
@@ -253,7 +253,7 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         for wavelength in torch.unique(wavelengths):
             if wavelength > 0:
                 wavelength_key = str(int(wavelength.detach().cpu().numpy().item()))
-                absorption_coefficients[wavelengths==wavelength] = nn.functional.relu(log_abs[wavelength_key]) # removed base_abs
+                absorption_coefficients[wavelengths==wavelength] = nn.functional.relu(log_abs[wavelength_key])
 
         # Link to equation:
         # https://www.wolframalpha.com/input?i=df%28z%29%2Fdz+%3D+e%28z%29+-+a%28z%29*f%28z%29%2C+f%280%29+%3D+0
