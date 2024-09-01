@@ -1,9 +1,7 @@
 import torch
 from torch import nn
-import datetime
 from sunerf.model.sunerf_nerf_models import NeRF
-from sunerf.model.stellar_model import SimpleStar
-from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler
+from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler, NonUniformStratifiedSampler
 
 class SuNeRFRendering(nn.Module):
 
@@ -24,6 +22,8 @@ class SuNeRFRendering(nn.Module):
             self.sampler = SphericalSampler(Rs_per_ds=Rs_per_ds, **sampling_config)
         elif sampling_type == 'stratified':
             self.sampler = StratifiedSampler(Rs_per_ds=Rs_per_ds, **sampling_config)
+        elif sampling_type == 'non-uniform-stratified':
+            self.sampler = NonUniformStratifiedSampler(Rs_per_ds=Rs_per_ds, **sampling_config)
         else:
             raise ValueError(f'Unknown sampling type {sampling_type}')
 
