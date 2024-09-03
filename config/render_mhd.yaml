@@ -1,11 +1,17 @@
 model: "MHDModel"
 batch_size: 4096
-render_path: "/mnt/disks/data/sunerfs/psi/training_sets_rotation"
-render_format: ["fits", "jpeg"]
+render_path: "/home/benoit_tremblay_23/new_3"
+render_format: ["jpeg"]
 overwrite: True
 observer_names: ['aia', 'euvia', 'euvib']
 observer_dir: ["/mnt/disks/data/raw/loadertest/aia/193", "/mnt/disks/data/raw/loadertest/euvia/193", "/mnt/disks/data/raw/loadertest/euvib/193"]
-observer_wl: [[94, 171, 193, 211, 304, 335], [94, 171, 193, 211, 304, 335], [94, 171, 193, 211, 304, 335]]
+observer_wl: [[94, 131, 171, 193, 211, 304, 335], [94, 131, 171, 193, 211, 304, 335], [94, 131, 171, 193, 211, 304, 335]]
 observer_res: [256, 256, 256]
 observer_ref: "/mnt/disks/data/raw/loadertest/aia/193/aia.lev1_euv_12s.2012-08-24T000008Z.193.image_lev1.fits"
-enforce_solar_rotation: True
+sampling_config:
+  hierarchical_sampling_config:
+    type: 'hierarchical'
+    n_samples: 512 
+  sampling_config:
+    type: 'stratified'
+    n_samples: 256

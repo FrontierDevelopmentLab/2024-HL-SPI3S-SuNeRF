@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Tuple
-
+import gc
 import numpy as np
 import torch
 from astropy import units as u
@@ -196,6 +196,7 @@ class ModelLoader(SuNeRFLoader):
             ref_map = self.ref_map.resample(resolution)
             # Get new coordinates of the image pixels
             img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
+            ref_map = None
         else:
             # Get coordinates of the image pixels
             img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
@@ -248,8 +249,12 @@ class ModelLoader(SuNeRFLoader):
             for i, b_outs in results:
                 for k, v in b_outs.items():
                     outputs.setdefault(k, []).append(v)
+                del b_outs
+                gc.collect()
 
         # Concatenate and reshape outputs
         # k: key, v: value
         results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
+        del outputs
+        gc.collect()
         return results
