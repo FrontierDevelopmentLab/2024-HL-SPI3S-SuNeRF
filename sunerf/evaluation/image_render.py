@@ -14,11 +14,11 @@ from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadia
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
-from sunerf.model.sunerf import DensityTemperatureSuNeRFModule
+from sunerf.model.sunerf_lightning_classes import DensityTemperatureSuNeRFModule
 import glob
 import yaml
 import torch
-from sunerf.model.model import NeRF_DT
+from sunerf.model.sunerf_nerf_models import NeRF_DT
 import psutil
 
 
@@ -344,7 +344,7 @@ if __name__ == '__main__':
             if model == 'SuNeRF':
                 wl = sunerf_model['data_config']['wavelengths']
             else:
-                wl = np.array(observer_wl[j])
+                _ , _, wl = np.intersect1d(observer_wl[j], np.array([94, 131, 171, 193, 211, 304, 335]), return_indices=True)
             # Outputs 
             outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=wl, distance=d*u.AU,
                                                    batch_size=batch_size, resolution=resolution)
@@ -366,4 +366,5 @@ if __name__ == '__main__':
             # Clear outputs
             outputs = None
             log_memory_usage("End loop - Clear outputs")
+            breakpoint()
         

@@ -32,17 +32,16 @@ class MHDModel(nn.Module):
         self.flast = int(self.density_files[-1].split('00')[1].split('.h5')[0])
 
                             
-        self.log_absortpion = nn.ParameterDict([
-                                ['94',  torch.tensor(14.0, dtype=torch.float32)],
-                                ['131', torch.tensor(14.0, dtype=torch.float32)],
-                                ['171', torch.tensor(14.0, dtype=torch.float32)],
-                                ['193', torch.tensor(14.0, dtype=torch.float32)],
-                                ['211', torch.tensor(14.0, dtype=torch.float32)],
-                                ['304', torch.tensor(14.0, dtype=torch.float32)],
-                                ['335', torch.tensor(14.0, dtype=torch.float32)]
-                        ])
+        self.log_absortpion = nn.Parameter(19.0*torch.tensor([[1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0]], dtype=torch.float32, requires_grad=True)) 
 
-        self.volumetric_constant = nn.Parameter(torch.tensor(0.01, dtype=torch.float32, requires_grad=True))
+        self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
+
 
     def interp(self, phi, theta, r, f, var, method='linear', fill_value=1e-10):
         """Interpolation of MHD data
@@ -192,7 +191,7 @@ class MHDModel(nn.Module):
             phi_mask = None
 
         # Output density, temperature, absorption and volumetric constant
-        return {'inferences': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
+        return {'RhoT': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
                 'vol_c': self.volumetric_constant}
 
 
