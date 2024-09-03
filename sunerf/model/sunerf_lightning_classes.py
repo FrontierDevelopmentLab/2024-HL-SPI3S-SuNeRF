@@ -189,10 +189,10 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
 
         # optimize coarse model
         coarse_image = outputs['coarse_image']
-        coarse_loss = self.loss(coarse_image, target_image)
+        coarse_loss = self.loss(coarse_image[wavelengths>-1], target_image[wavelengths>-1])
         # optimize fine model
         fine_image = outputs['fine_image']
-        fine_loss = self.loss(fine_image, target_image)
+        fine_loss = self.loss(fine_image[wavelengths>-1], target_image[wavelengths>-1])
 
         regularization_loss = outputs['regularization'].mean()  # suppress unconstrained regions
         loss = (self.lambda_image * (coarse_loss + fine_loss) +
