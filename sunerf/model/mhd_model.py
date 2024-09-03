@@ -31,7 +31,6 @@ class MHDModel(nn.Module):
         self.ffirst = int(self.density_files[0].split('00')[1].split('.h5')[0])  # rho002531.h5
         self.flast = int(self.density_files[-1].split('00')[1].split('.h5')[0])
 
-                            
         self.log_absortpion = nn.Parameter(19.0*torch.tensor([[1.0, 1.0, 1.0],
                                                          [1.0, 1.0, 1.0],
                                                          [1.0, 1.0, 1.0],
@@ -41,7 +40,6 @@ class MHDModel(nn.Module):
                                                          [1.0, 1.0, 1.0]], dtype=torch.float32, requires_grad=True)) 
 
         self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
-
 
     def interp(self, phi, theta, r, f, var, method='linear', fill_value=1e-10):
         """Interpolation of MHD data
@@ -92,6 +90,7 @@ class MHDModel(nn.Module):
         # print(f'{var}00{f}.h5', np.amin(data), np.amax(data), np.percentile(data, 1), np.percentile(data, 99), np.percentile(data, 5), np.percentile(data, 95))
         # Filter data
         # log_memory_usage("+++++++++ File opened")
+        fill_value = np.median(data[np.where(data > 0)])
         data[np.where(data < 0)] = fill_value
 
         # Interpolation based on device
@@ -149,8 +148,8 @@ class MHDModel(nn.Module):
         # Initialize output tensors filled with zeros with shape x
         output_density = torch.zeros_like(x)
         output_temperature = torch.zeros_like(x)
-        fill_value_density = 1.e-5
-        fill_value_temperature = 1.e-3
+        # fill_value_density = 1.e-5
+        # fill_value_temperature = 1.e-3
         interp_type = 'linear'
 
         # loop over only unique times
@@ -195,9 +194,6 @@ class MHDModel(nn.Module):
                 'vol_c': self.volumetric_constant}
 
 
-
-
-
 if __name__ == '__main__':
 
     data_path = '/mnt/disks/data/MHD'
@@ -224,4 +220,3 @@ if __name__ == '__main__':
     
     print("Output density", output_density)
     print("Output temp", output_temperature)
-    
