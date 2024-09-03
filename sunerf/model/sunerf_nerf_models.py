@@ -4,6 +4,14 @@ import torch
 from torch import nn
 
 
+class Sine(nn.Module):
+    def __init__(self, w0: float = 1.):
+        super().__init__()
+        self.w0 = w0
+
+    def forward(self, x):
+        return torch.sin(self.w0 * x)
+    
 class NeRF(nn.Module):
     r"""
     Neural radiance fields module.
@@ -16,12 +24,20 @@ class NeRF(nn.Module):
             n_layers: int = 8,
             d_filter: int = 512,
             skip: Tuple[int] = (),
-            encoding='positional'
+            encoding='positional',
+            activation = 'siren'
     ):
         super().__init__()
         self.d_input = d_input
         self.skip = skip
-        self.act = Sine()
+        if activation.lower() == 'siren':
+            self.act = Sine()
+        elif activation.lower() == 'relu':
+            self.act = nn.ReLU()
+        elif activation.lower() == 'lrelu':
+            self.act = nn.LeakyReLU()
+        else:
+            raise NotImplementedError("This activation function is not implemented")
 
         # encoding_config = {'type': 'positional', 'num_freqs': 20} if encoding_config is None else encoding_config
         # encoding_type = encoding_config.pop('type')
@@ -63,13 +79,6 @@ class EmissionModel(NeRF):
         super().__init__(d_input=4, d_output=2, **kwargs)
 
 
-class Sine(nn.Module):
-    def __init__(self, w0: float = 1.):
-        super().__init__()
-        self.w0 = w0
-
-    def forward(self, x):
-        return torch.sin(self.w0 * x)
 
 
 class TrainablePositionalEncoding(nn.Module):
@@ -148,8 +157,11 @@ class NeRF_DT(NeRF):
             encoding='positional', 
             base_log_temperature: float = 5.0,
             base_log_density: float = 8.0,
+            output_norm: float = 100.0,
+            activation = 'siren'
     ):
-        super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding)
+        super().__init__(d_input=d_input, d_output=d_output, n_layers=n_layers, d_filter=d_filter, skip=skip, encoding=encoding,
+                         activation=activation)
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
