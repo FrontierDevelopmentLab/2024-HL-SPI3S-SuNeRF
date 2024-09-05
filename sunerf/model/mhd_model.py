@@ -41,7 +41,7 @@ class MHDModel(nn.Module):
 
         self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
-    def interp(self, phi, theta, r, f, var, method='linear', fill_value=1e-10):
+    def interp(self, phi, theta, r, f, var, method='linear', fill_value=None):
         """Interpolation of MHD data
 
         Args:
@@ -65,6 +65,9 @@ class MHDModel(nn.Module):
         data = h5file['Data']
         dims = data.shape
         ndims = np.ndim(data)
+
+        # Clip radius
+        r[r<1.0] = 1.0
 
         # Get the scales if they exist:
         for i in range(0, ndims):
@@ -94,7 +97,7 @@ class MHDModel(nn.Module):
         data[np.where(data < 0)] = fill_value
 
         # Interpolation based on device
-        if self.device.type == 'cuda1':
+        if self.device.type == 'cuda':
             f1_interp = rgi_gpu((cp.array(phi_mhd), cp.array(th_mhd), cp.array(r_mhd)), cp.array(data),
                                 method=method, bounds_error=False, fill_value=fill_value)
             data = None
@@ -169,13 +172,13 @@ class MHDModel(nn.Module):
 
             # Interpolation of density and temperature
             f1_rho = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f1, 'rho',
-                                  method=interp_type, fill_value=fill_value_density)).to(t.device)
+                                  method=interp_type, fill_value=None)).to(t.device)
             f1_t = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f1, 't',
-                                method=interp_type, fill_value=fill_value_temperature)).to(t.device)
+                                method=interp_type, fill_value=None)).to(t.device)
             f2_rho = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f2, 'rho',
-                                  method=interp_type, fill_value=fill_value_density)).to(t.device)
+                                  method=interp_type, fill_value=None)).to(t.device)
             f2_t = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f2, 't',
-                                method=interp_type, fill_value=fill_value_temperature)).to(t.device)
+                                method=interp_type, fill_value=None)).to(t.device)
 
             # Linear time interpolation of density and temperature
             output_density[mask] = torch.log(1e8*((1-frame_fraction)*f1_rho + frame_fraction*f2_rho))  # cm^3
@@ -212,10 +215,10 @@ if __name__ == '__main__':
     output = model.forward(query_points=query_points)
     
     #output_density = inference[0]
-    output_density = output['inferences'][0]
+    output_density = output['RhoT'][0]
     
     # output_temperature = inference[1]
-    output_temperature = output['inferences'][1]
+    output_temperature = output['RhoT'][1]
     
     
     print("Output density", output_density)
