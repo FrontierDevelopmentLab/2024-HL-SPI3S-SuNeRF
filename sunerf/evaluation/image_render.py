@@ -248,7 +248,7 @@ if __name__ == '__main__':
     sampling_config = config['sampling_config']
     
     # Find files and metadata for each observer
-    observer_files = [sorted(glob.glob(f"{dir}/*.fits"))[0:1] for dir in observer_dir]
+    observer_files = [sorted(glob.glob(f"{dir}/*.fits")) for dir in observer_dir]
     observer_meta = [[load_observer_meta(filepath) for filepath in tqdm(files)] for files in observer_files]
    
     # Reference map for module from the first file
@@ -329,7 +329,7 @@ if __name__ == '__main__':
                                                             model_config=model_config, 
                                                             sampling_config=sampling_config['sampling_config'].copy(), 
                                                             hierarchical_sampling_config=sampling_config['hierarchical_sampling_config'].copy())
-            loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map, serial=True)
+            loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map, serial=False)
             
         render = ImageRender(render_path)
         resolution = (observer_res[j], observer_res[j])*u.pix
@@ -366,5 +366,5 @@ if __name__ == '__main__':
             # Clear outputs
             outputs = None
             log_memory_usage("End loop - Clear outputs")
-            breakpoint()
+            # breakpoint()
         

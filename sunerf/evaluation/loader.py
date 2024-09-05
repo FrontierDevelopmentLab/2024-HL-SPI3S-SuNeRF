@@ -153,12 +153,12 @@ class ModelLoader(SuNeRFLoader):
                                           if ('t_obs' in ref_map.meta) else ref_map.meta['date-obs'][:-1], 
                                           '%Y-%m-%dT%H:%M:%S.%f')
 
-    def process_batch(self, b_rays_o, b_rays_d, b_time, b_wl):
-        b_outs = self.rendering(b_rays_o, b_rays_d, b_time, b_wl)
+    def process_batch(self, b_rays_o, b_rays_d, b_time, b_wl, b_instrument):
+        b_outs = self.rendering(b_rays_o, b_rays_d, b_time, b_wl, b_instrument)
         return b_outs
 
-    def process_batch_with_index(self, index, b_rays_o, b_rays_d, b_time, b_wl):
-            result = self.process_batch(b_rays_o, b_rays_d, b_time, b_wl)
+    def process_batch_with_index(self, index, b_rays_o, b_rays_d, b_time, b_wl, b_instrument):
+            result = self.process_batch(b_rays_o, b_rays_d, b_time, b_wl, b_instrument)
             return index, result
 
 
@@ -240,8 +240,8 @@ class ModelLoader(SuNeRFLoader):
                     outputs[k].append(v)
         else:
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, b_wl, b_instrument)) for
-                        i, (b_rays_o, b_rays_d, b_time, b_wl[None, :], b_instrument[None, :]) in enumerate(zip(rays_o, rays_d, time, wl, instrument))]
+                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, wl, instrument)) for
+                        i, (b_rays_o, b_rays_d, b_time) in enumerate(zip(rays_o, rays_d, time))]
                 results = [(i, future.result()) for i, future in futures]
 
             # Sort results by index to maintain order
