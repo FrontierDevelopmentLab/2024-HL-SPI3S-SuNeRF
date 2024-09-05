@@ -12,6 +12,7 @@ import concurrent.futures
 from sunerf.data.date_util import normalize_datetime, unnormalize_datetime
 from sunerf.data.ray_sampling import get_rays
 from sunerf.train.coordinate_transformation import pose_spherical
+from tqdm import tqdm
 
 class SuNeRFLoader:
 
@@ -231,7 +232,7 @@ class ModelLoader(SuNeRFLoader):
         outputs = {}
         # Iterate over batches of rays and time
         if self.serial:
-            for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
+            for b_rays_o, b_rays_d, b_time in tqdm(zip(rays_o, rays_d, time), position=1, total=len(rays_o)):
                 b_outs = self.rendering(b_rays_o, b_rays_d, b_time, wl, instrument)
                 for k, v in b_outs.items():
                     if k not in outputs:
