@@ -173,7 +173,7 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
                          rendering=rendering, **kwargs)
 
         self.loss = loss
-        # self.image_scaling = ImageAsinhScaling(**image_scaling_config)
+        self.image_scaling = ImageAsinhScaling(**image_scaling_config)
 
     def training_step(self, batch, batch_nb):
         rays, time, target_image, wavelengths, instruments = batch['tracing']['rays'], batch['tracing']['time'], batch['tracing'][
@@ -188,14 +188,14 @@ class DensityTemperatureSuNeRFModule(BaseSuNeRFModule):
             assert not torch.isinf(v).any(), f"! [Numerical Alert] {k} contains Inf."
 
         # backpropagation
-        # target_image = self.image_scaling(target_image)
+        target_image = self.image_scaling(target_image)
         # optimize coarse model
-        # coarse_image = self.image_scaling(outputs['coarse_image'])
-        coarse_image = outputs['coarse_image']
+        coarse_image = self.image_scaling(outputs['coarse_image'])
+        # coarse_image = outputs['coarse_image']
         coarse_loss = self.loss(coarse_image[wavelengths>-1], target_image[wavelengths>-1])
         # optimize fine model
-        # fine_image = self.image_scaling(outputs['fine_image'])
-        fine_image = outputs['fine_image']
+        fine_image = self.image_scaling(outputs['fine_image'])
+        # fine_image = outputs['fine_image']
         fine_loss = self.loss(fine_image[wavelengths>-1], target_image[wavelengths>-1])
 
         regularization_loss = outputs['regularization'].mean()  # suppress unconstrained regions

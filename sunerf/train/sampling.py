@@ -100,11 +100,12 @@ class StratifiedSampler(torch.nn.Module):
 
             dists = z_vals[:, 1:]-z_vals[:, :-1]
             # shorten the last distance to ensure that the perturbed point never ends inside the Sun
-            dists[:, -1] = 0.8*dists[:, -1] 
+            dists[:, -1] = dists[:, -1]/1.05 
             t_rand = torch.rand(dists.shape, device=z_vals.device)
             # Perturb all points except the endpoints, bringing each point closer to the far
             # Also give a slight leaway to ensure no dark regions exist
-            z_vals[:, :-1] = z_vals[:, :-1] + dists*t_rand*1.1
+            z_vals[:, :-1] = z_vals[:, :-1] + dists*t_rand*1.05
+            z_vals, _ = torch.sort(z_vals)
 
 
         pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]
