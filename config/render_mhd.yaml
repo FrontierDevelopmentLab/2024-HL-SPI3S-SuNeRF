@@ -15,3 +15,4 @@ sampling_config:
   sampling_config:
     type: 'stratified'
     n_samples: 256
+    perturb: False
