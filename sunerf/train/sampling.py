@@ -75,11 +75,11 @@ class StratifiedSampler(torch.nn.Module):
         distance = rays_o.pow(2).sum(-1).pow(0.5)
 
         # solve quadratic equation --> find points at 1 solar radii
-        a = rays_d.pow(2).sum(-1)
-        b = (2 * rays_o * rays_d).sum(-1)
+        a = rays_d.to(torch.float64).pow(2).sum(-1)
+        b = (2 * rays_o.to(torch.float64) * rays_d.to(torch.float64)).sum(-1)
         # stop sampling at solar surface
-        c = rays_o.pow(2).sum(-1) - self.solar_R ** 2
-        dist_inner = (-b - torch.sqrt(b.pow(2) - 4 * a * c)) / (2 * a)
+        c = rays_o.to(torch.float64).pow(2).sum(-1) - self.solar_R.to(torch.float64) ** 2
+        dist_inner = ((-b - torch.sqrt(b.pow(2) - 4 * a * c)) / (2 * a)).to(torch.float32)
 
         dist_near = distance - self.distance
         dist_far = distance + self.distance
@@ -92,11 +92,20 @@ class StratifiedSampler(torch.nn.Module):
 
         # Draw uniform samples from bins along ray
         if self.perturb:
-            mids = .5 * (z_vals[:, 1:] + z_vals[:, :-1])
-            upper = torch.concat([mids, z_vals[:, -1:]], dim=1)
-            lower = torch.concat([z_vals[:, :1], mids], dim=1)
-            t_rand = torch.rand(z_vals.shape, device=z_vals.device)
-            z_vals = lower + (upper - lower) * t_rand
+            # mids = .5 * (z_vals[:, 1:] + z_vals[:, :-1])
+            # upper = torch.concat([mids, z_vals[:, -1:]], dim=1)
+            # lower = torch.concat([z_vals[:, :1], mids], dim=1)
+            # t_rand = torch.rand(z_vals.shape, device=z_vals.device)
+            # z_vals = lower + (upper - lower) * t_rand
+
+            dists = z_vals[:, 1:]-z_vals[:, :-1]
+            # shorten the last distance to ensure that the perturbed point never ends inside the Sun
+            dists[:, -1] = 0.8*dists[:, -1] 
+            t_rand = torch.rand(dists.shape, device=z_vals.device)
+            # Perturb all points except the endpoints, bringing each point closer to the far
+            # Also give a slight leaway to ensure no dark regions exist
+            z_vals[:, :-1] = z_vals[:, :-1] + dists*t_rand*1.1
+
 
         pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]
 
