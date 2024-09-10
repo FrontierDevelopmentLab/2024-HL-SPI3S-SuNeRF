@@ -1,5 +1,9 @@
+import pytorch_lightning as pl
+pl.seed_everything(7)
 import argparse
 import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = "3"
+
 from torch import nn
 import torch
 import yaml
@@ -8,11 +12,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 import dateutil as dt
 from sunerf.data.loader.multi_thermal_loader import MultiThermalDataModule
-from sunerf.model.sunerf import save_state, DensityTemperatureSuNeRFModule
+from sunerf.model.sunerf_lightning_classes import save_state, DensityTemperatureSuNeRFModule
 from sunerf.train.callback import TestMultiThermalImageCallback
-from sunerf.sunerf.model.model import NeRF_DT
+from sunerf.model.sunerf_nerf_models import NeRF_DT
 torch.set_float32_matmul_precision('high')
-
+pl.seed_everything(7)
 
 # Main function that sets up and runs the training process
 if __name__ == '__main__':
@@ -43,6 +47,8 @@ if __name__ == '__main__':
     epochs = training_config['epochs'] if 'epochs' in training_config else 100
     log_every_n_steps = training_config['log_every_n_steps'] if 'log_every_n_steps' in training_config else None
     ckpt_path = training_config['meta_path'] if 'meta_path' in training_config else 'last'
+    lambda_image = training_config['lambda_image'] if 'lambda_image' in training_config else 1.0
+    lambda_regularization = training_config['lambda_regularization'] if 'lambda_regularization' in training_config else 1.0
 
     # initialize logger
     logger = WandbLogger(**logging_config, save_dir=working_dir)
@@ -59,6 +65,7 @@ if __name__ == '__main__':
     sunerf = DensityTemperatureSuNeRFModule(Rs_per_ds=data_module.Rs_per_ds, seconds_per_dt=data_module.seconds_per_dt,
                                             image_scaling_config=image_scaling_config, model=model, loss=loss,
                                             validation_dataset_mapping=data_module.validation_dataset_mapping,
+                                            lambda_image=lambda_image, lambda_regularization=lambda_regularization,
                                             **model_config)
 
     # initialize callbacks
@@ -70,7 +77,8 @@ if __name__ == '__main__':
 
     test_image_callback = TestMultiThermalImageCallback(data_module.validation_dataset_mapping[0],
                                             data_module.config['resolution'],
-                                            data_module.config['wavelengths'])
+                                            data_module.config['wavelengths'],
+                                            data_module.config['instrument'])
     callbacks = [checkpoint_callback, save_callback, test_image_callback]
 
     N_GPUS = torch.cuda.device_count()

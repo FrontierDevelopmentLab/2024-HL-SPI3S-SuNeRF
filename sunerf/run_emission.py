@@ -8,7 +8,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from sunerf.data.loader.single_channel import SingleChannelDataModule
-from sunerf.model.sunerf import save_state, EmissionSuNeRFModule
+from sunerf.model.sunerf_lightning_classes import save_state, EmissionSuNeRFModule
 from sunerf.train.callback import TestImageCallback
 
 if __name__ == '__main__':

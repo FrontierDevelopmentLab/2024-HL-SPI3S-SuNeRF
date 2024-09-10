@@ -16,40 +16,38 @@ from tqdm import tqdm
 from sunerf.model.mhd_model import MHDModel
 import torch
 
-from sunerf.sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
+from sunerf.rendering.density_temperature import DensityTemperatureRadiativeTransfer
 from sunerf.evaluation.image_render import load_observer_meta
 from sunerf.data.utils import sdo_cmaps, sdo_norms
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.train.coordinate_transformation import spherical_to_cartesian
 import matplotlib.pyplot as plt
 
-chk_path = '/mnt/disks/data/sunerfs/psi/checkpoints/save_state.snf'
+chk_path = '/mnt/disks/data/sunerfs/psi/128/checkpoints/save_state.snf'
 load_ckpt = torch.load(chk_path)
 #result_path = '/mnt/disks/data/sunerfs/psi/evaluation'
 
-sdo_map = Map('/home/christophschirninger/2024-HL-SPI3S-SuNeRF/sunerf/2012-10-19T00:00:00.fits')
+sdo_map = Map('/mnt/disks/data/AIA/171/aia171_2010-05-13T00:00:07.fits')
 #stereo_map = Map('/mnt/disks/data/raw/171/2012-09-06T20:00:00_A.fits')
 
 au = (1 * u.AU).to(u.solRad).value
-distance = 1.5 * au
+distance = 0.99 * au  # Distance to earth
+# distance = 1.5 * au # Mars distance
 
-os.makedirs(result_path, exist_ok=True)
-data_path = '/mnt/disks/data/MHD'
-model_config = {'data_path': data_path}
 
 # init loader
-#rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=MHDModel, model_config=model_config)
 loader = ModelLoader(rendering=load_ckpt['rendering'], model=load_ckpt['rendering'].fine_model, ref_map=sdo_map)
 cmap = load_ckpt['data_config']['wavelengths']
 
 # find center point on sphere
 center = spherical_to_cartesian(1, 18 * np.pi / 180, 190 * np.pi / 180)
-meta_data = load_observer_meta('/home/christophschirninger/2024-HL-SPI3S-SuNeRF/sunerf/2012-10-19T00:00:00.fits')
+meta_data = load_observer_meta('/mnt/disks/data/AIA/171/aia171_2010-05-13T00:00:07.fits')
 lat, lon, d, time = meta_data
-t = datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f')
+t = 1
+#t = datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f')
 
-outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=cmap, distance=d*u.AU,
-                                                   batch_size=1024, resolution=(64, 64)*u.pix)
+outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=cmap, distance=distance * u.AU,
+                                                   batch_size=1024, resolution=(16, 16)*u.pix)
 
 
 # Plot fine image
@@ -66,4 +64,4 @@ ax[2].set_title('193 $\AA$', fontsize=20)
 ax[3].set_title('211 $\AA$', fontsize=20)
 ax[4].set_title('304 $\AA$', fontsize=20)
 ax[5].set_title('335 $\AA$', fontsize=20)
-plt.savefig('First_SuNeRF_DT_ITI_rendered_Mars.jpg', dpi=200, transparent=True)
+plt.savefig('MHD_128_rendered_by16x16.jpg', dpi=200, transparent=True)

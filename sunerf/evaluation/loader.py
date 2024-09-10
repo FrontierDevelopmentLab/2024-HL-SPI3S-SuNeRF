@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Tuple
-
+import gc
 import numpy as np
 import torch
 from astropy import units as u
@@ -12,6 +12,7 @@ import concurrent.futures
 from sunerf.data.date_util import normalize_datetime, unnormalize_datetime
 from sunerf.data.ray_sampling import get_rays
 from sunerf.train.coordinate_transformation import pose_spherical
+from tqdm import tqdm
 
 class SuNeRFLoader:
 
@@ -196,6 +197,7 @@ class ModelLoader(SuNeRFLoader):
             ref_map = self.ref_map.resample(resolution)
             # Get new coordinates of the image pixels
             img_coords = all_coordinates_from_map(ref_map).transform_to(frames.Helioprojective)
+            ref_map = None
         else:
             # Get coordinates of the image pixels
             img_coords = all_coordinates_from_map(self.ref_map).transform_to(frames.Helioprojective)
@@ -219,27 +221,23 @@ class ModelLoader(SuNeRFLoader):
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
         wl = torch.tensor(wl).to(self.device)
-        flat_wl = wl[None,:].expand(flat_rays_o.shape[0],wl.shape[0])
-        
-        rays_o, rays_d, time, wl = torch.split(flat_rays_o, batch_size), \
-            torch.split(flat_rays_d, batch_size), \
-            torch.split(flat_time, batch_size), \
-            torch.split(flat_wl, batch_size)
+        wl = wl[None, :].expand(rays_o[0].shape[0], wl.shape[0])
+        instrument = torch.zeros(rays_o[0].shape[0], dtype=int).to(self.device)
 
         # Initialize outputs
         outputs = {}
         # Iterate over batches of rays and time
         if self.serial:
-            for b_rays_o, b_rays_d, b_time, b_wl in zip(rays_o, rays_d, time, wl):
-                b_outs = self.rendering(b_rays_o, b_rays_d, b_time, b_wl)
+            for b_rays_o, b_rays_d, b_time in tqdm(zip(rays_o, rays_d, time), position=1, total=len(rays_o)):
+                b_outs = self.rendering(b_rays_o, b_rays_d, b_time, wl, instrument)
                 for k, v in b_outs.items():
                     if k not in outputs:
                         outputs[k] = []
                     outputs[k].append(v)
         else:
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, b_wl)) for
-                        i, (b_rays_o, b_rays_d, b_time, b_wl) in enumerate(zip(rays_o, rays_d, time, wl))]
+                futures = [(i, executor.submit(self.process_batch, b_rays_o, b_rays_d, b_time, b_wl, b_instrument)) for
+                        i, (b_rays_o, b_rays_d, b_time, b_wl[None, :], b_instrument[None, :]) in enumerate(zip(rays_o, rays_d, time, wl, instrument))]
                 results = [(i, future.result()) for i, future in futures]
 
             # Sort results by index to maintain order
@@ -249,8 +247,12 @@ class ModelLoader(SuNeRFLoader):
             for i, b_outs in results:
                 for k, v in b_outs.items():
                     outputs.setdefault(k, []).append(v)
+                del b_outs
+                gc.collect()
 
         # Concatenate and reshape outputs
         # k: key, v: value
         results = {k: torch.cat(v).view(*img_shape, *v[0].shape[1:]).cpu().numpy() for k, v in outputs.items()}
+        del outputs
+        gc.collect()
         return results

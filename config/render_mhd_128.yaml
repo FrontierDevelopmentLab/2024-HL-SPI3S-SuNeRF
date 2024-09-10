@@ -1,0 +1,10 @@
+model: "MHDModel"
+batch_size: 4096
+render_path: "/mnt/disks/data/sunerfs/psi/128/training_sets"
+render_format: ["fits", "jpeg"]
+overwrite: True
+observer_names: ['aia'] # 'euvia', 'euvib']
+observer_dir: ["/mnt/disks/data/raw/loadertest/aia/193"] # "/mnt/disks/data/raw/loadertest/euvia/193", "/mnt/disks/data/raw/loadertest/euvib/193"]
+observer_wl: [[94, 171, 193, 211, 304, 335]] # [94, 171, 193, 211, 304, 335], [94, 171, 193, 211, 304, 335]
+observer_res: [128] # 128, 128]
+observer_ref: "/mnt/disks/data/raw/loadertest/aia/193/aia.lev1_euv_12s.2012-08-24T000008Z.193.image_lev1.fits"

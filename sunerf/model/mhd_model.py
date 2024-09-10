@@ -7,6 +7,8 @@ import cupy as cp
 from scipy.interpolate import RegularGridInterpolator as rgi
 from cupyx.scipy.interpolate import RegularGridInterpolator as rgi_gpu
 import numpy as np
+import h5py as h5
+import gc
 
 class MHDModel(nn.Module):
     r""" Interpolation of MHD model such that it behaves like a trained NeRF
@@ -29,20 +31,17 @@ class MHDModel(nn.Module):
         self.ffirst = int(self.density_files[0].split('00')[1].split('.h5')[0])  # rho002531.h5
         self.flast = int(self.density_files[-1].split('00')[1].split('.h5')[0])
 
-                            
-        self.log_absortpion = nn.ParameterDict([
-                                ['94',  torch.tensor(20.4, dtype=torch.float32)],
-                                ['131', torch.tensor(20.2, dtype=torch.float32)],
-                                ['171', torch.tensor(20.0, dtype=torch.float32)],
-                                ['193', torch.tensor(19.8, dtype=torch.float32)],
-                                ['211', torch.tensor(19.6, dtype=torch.float32)],
-                                ['304', torch.tensor(19.4, dtype=torch.float32)],
-                                ['335', torch.tensor(19.2, dtype=torch.float32)]
-                        ])
+        self.log_absortpion = nn.Parameter(19.0*torch.tensor([[1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0]], dtype=torch.float32, requires_grad=True)) 
 
-        self.volumetric_constant = nn.Parameter(torch.tensor(1.0, dtype=torch.float32, requires_grad=True))
+        self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
-    def interp(self, phi, theta, r, f, var, method='linear', fill_value=1e-10):
+    def interp(self, phi, theta, r, f, var, method='linear', fill_value=None):
         """Interpolation of MHD data
 
         Args:
@@ -59,18 +58,65 @@ class MHDModel(nn.Module):
         """
 
         # Read data
-        r_mhd, th_mhd, phi_mhd, data = rdhdf_3d(os.path.join(self.data_path, var, f'{var}00{f}.h5'))
+        # log_memory_usage("+++++++++ Open file")
+        # r_mhd, th_mhd, phi_mhd, data = rdhdf_3d(os.path.join(self.data_path, var, f'{var}00{1813}.h5'))
+
+        h5file = h5.File(os.path.join(self.data_path, var, f'{var}00{f}.h5'), 'r')
+        data = h5file['Data']
+        dims = data.shape
+        ndims = np.ndim(data)
+
+        # Clip radius
+        r[r<1.0] = 1.0
+
+        # Get the scales if they exist:
+        for i in range(0, ndims):
+            if i == 0:
+                if len(h5file['Data'].dims[0].keys()) != 0:
+                    r_mhd = h5file['Data'].dims[0][0]
+            elif i == 1:
+                if len(h5file['Data'].dims[1].keys()) != 0:
+                    th_mhd = h5file['Data'].dims[1][0]
+            elif i == 2:
+                if len(h5file['Data'].dims[2].keys()) != 0:
+                    phi_mhd = h5file['Data'].dims[2][0]
+
+        r_mhd = np.array(r_mhd)
+        th_mhd = np.array(th_mhd)
+        phi_mhd = np.array(phi_mhd)
+        data = np.array(data)
+        h5file.close()
+        del h5file
+        gc.collect()
+
+        # r_mhd, th_mhd, phi_mhd, data = self.r_mhd, self.th_mhd, self.phi_mhd, self.data
+        # print(f'{var}00{f}.h5', np.amin(data), np.amax(data), np.percentile(data, 1), np.percentile(data, 99), np.percentile(data, 5), np.percentile(data, 95))
         # Filter data
+        # log_memory_usage("+++++++++ File opened")
+        fill_value = np.median(data[np.where(data > 0)])
         data[np.where(data < 0)] = fill_value
 
         # Interpolation based on device
-        if self.device.type == 'cuda1':
+        if self.device.type == 'cuda':
             f1_interp = rgi_gpu((cp.array(phi_mhd), cp.array(th_mhd), cp.array(r_mhd)), cp.array(data),
                                 method=method, bounds_error=False, fill_value=fill_value)
+            data = None
+            phi_mhd = None
+            th_mhd = None
+            r_mhd = None
             return cp.asnumpy(f1_interp((cp.array(phi), cp.array(theta), cp.array(r))))
         else:
-            f1_interp = rgi((phi_mhd, th_mhd, r_mhd), data,
-                            method=method, bounds_error=False, fill_value=fill_value)
+            # log_memory_usage("+++++++++ Interp start")
+            # breakpoint()
+            f1_interp = rgi((phi_mhd, th_mhd, r_mhd), data, method=method, bounds_error=False, fill_value=fill_value)
+            # h5file.close()
+            del data, phi_mhd, th_mhd, r_mhd
+            gc.collect()
+            # data = None
+            # phi_mhd = None
+            # th_mhd = None
+            # r_mhd = None
+            # log_memory_usage("+++++++++ Interp end")
             return f1_interp((phi, theta, r))
 
     def forward(self, query_points):
@@ -105,7 +151,8 @@ class MHDModel(nn.Module):
         # Initialize output tensors filled with zeros with shape x
         output_density = torch.zeros_like(x)
         output_temperature = torch.zeros_like(x)
-        fill_value = 1.e-10
+        # fill_value_density = 1.e-5
+        # fill_value_temperature = 1.e-3
         interp_type = 'linear'
 
         # loop over only unique times
@@ -125,18 +172,54 @@ class MHDModel(nn.Module):
 
             # Interpolation of density and temperature
             f1_rho = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f1, 'rho',
-                                  method=interp_type, fill_value=fill_value)).to(t.device)
+                                  method=interp_type, fill_value=None)).to(t.device)
             f1_t = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f1, 't',
-                                method=interp_type, fill_value=fill_value)).to(t.device)
+                                method=interp_type, fill_value=None)).to(t.device)
             f2_rho = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f2, 'rho',
-                                  method=interp_type, fill_value=fill_value)).to(t.device)
+                                  method=interp_type, fill_value=None)).to(t.device)
             f2_t = torch.Tensor(self.interp(phi_mask, th_mask, r_mask, f2, 't',
-                                method=interp_type, fill_value=fill_value)).to(t.device)
+                                method=interp_type, fill_value=None)).to(t.device)
 
             # Linear time interpolation of density and temperature
-            output_density[mask] = torch.log((1-frame_fraction)*f1_rho + frame_fraction*f2_rho)
-            output_temperature[mask] = torch.log10(1e6*((1-frame_fraction)*f1_t + frame_fraction*f2_t))
+            output_density[mask] = torch.log(1e8*((1-frame_fraction)*f1_rho + frame_fraction*f2_rho))  # cm^3
+            output_temperature[mask] = torch.log10(2.807066716734894e7*((1-frame_fraction)*f1_t + frame_fraction*f2_t))  # TODO: Verify this multiplication factor
+            f1_t = None
+            f2_t = None
+            f1_rho = None
+            f2_rho = None
+            mask = None
+            r_mask = None
+            th_mask = None
+            phi_mask = None
 
         # Output density, temperature, absorption and volumetric constant
-        return {'inferences': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
+        return {'RhoT': torch.stack((output_density, output_temperature), dim=-1), 'log_abs': self.log_absortpion,
                 'vol_c': self.volumetric_constant}
+
+
+if __name__ == '__main__':
+
+    data_path = '/mnt/disks/data/MHD'
+
+    # Baseline un-trained MHD model
+    model = MHDModel(data_path=data_path)
+    # print(output_density, output_temperature)
+    
+    query_points =torch.tensor([
+        [1.0, 0.5, 0, 0], # Example point 1
+        [1, 1, 1, 1],   # Example point 2
+            # Can add more points as ineeded 
+        
+    ])
+    
+    output = model.forward(query_points=query_points)
+    
+    #output_density = inference[0]
+    output_density = output['RhoT'][0]
+    
+    # output_temperature = inference[1]
+    output_temperature = output['RhoT'][1]
+    
+    
+    print("Output density", output_density)
+    print("Output temp", output_temperature)
