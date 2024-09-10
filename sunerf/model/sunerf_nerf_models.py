@@ -166,13 +166,13 @@ class NeRF_DT(NeRF):
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
         
-        self.log_absortpion = nn.Parameter(torch.tensor([[14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0]], dtype=torch.float32, requires_grad=True)) 
+        self.log_absortpion = nn.Parameter(torch.tensor([[18.0, 18.0, 18.0],
+                                                         [18.0, 18.0, 18.0],
+                                                         [18.0, 18.0, 18.0],
+                                                         [18.0, 18.0, 18.0],
+                                                         [18.0, 18.0, 18.0],
+                                                         [18.0, 18.0, 18.0],
+                                                         [18.0, 18.0, 18.0]], dtype=torch.float32, requires_grad=True)) 
 
         self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
 
