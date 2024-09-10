@@ -209,6 +209,7 @@ class ModelLoader(SuNeRFLoader):
         # Convert rays to tensors
         rays_o, rays_d = torch.from_numpy(rays_o), torch.from_numpy(rays_d)
 
+
         # Get image shape
         img_shape = rays_o.shape[:2]
         # Flatten rays
@@ -220,6 +221,9 @@ class ModelLoader(SuNeRFLoader):
         # Create tensor of time values
         flat_time = torch.ones_like(flat_rays_o[:, 0:1]) * time
         # make batches
+        rays_o, rays_d, time = torch.split(flat_rays_o, batch_size), \
+            torch.split(flat_rays_d, batch_size), \
+            torch.split(flat_time, batch_size)
         wl = torch.tensor(wl).to(self.device)
         wl = wl[None, :].expand(rays_o[0].shape[0], wl.shape[0])
         instrument = torch.zeros(rays_o[0].shape[0], dtype=int).to(self.device)
