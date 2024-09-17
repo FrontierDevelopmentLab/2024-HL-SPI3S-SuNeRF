@@ -100,15 +100,25 @@ class FastKANLayer(nn.Module):
         return x, y
 
 class SphericalBessel(nn.Module):
-    def __init__(self, k_max: int = 1, l_max: int = 0):
-        super(SphericalBessel, self).__init__()
-        self.k_max = k_max
+    def __init__(self, l_max: int = 1):
+        super().__init__()
         self.l_max = l_max
 
-    def forward(self, r):
-        k = torch.linspace(1, self.k_max, self.k_max).to(r.device)
-        r = r.to(torch.float64)[:,None]*k[None,:]
-        y = torch.zeros([self.l_max]+[s for s in r.shape], dtype=torch.float64).to(r.device)
+        self.l = None
+        self.m = None
+        for i in range(l_max+1):
+            if i ==0:
+                self.l = torch.Tensor([0])
+                self.m = torch.Tensor([0])
+            else:
+                m_array = torch.arange(-i, i+1)
+                self.l = torch.cat((self.l, m_array*0+i))
+                self.m = torch.cat((self.m, m_array))        
+
+    def bessel_down(self, r, k):
+
+        r = r.to(torch.float64)[...,None]*k.to(torch.float64)
+        y = torch.zeros_like(r, dtype=torch.float64)
 
         lstart = self.l_max + int(torch.sqrt(torch.Tensor([10*self.l_max])))
         j2 = torch.zeros_like(r, dtype=torch.float64)
@@ -116,163 +126,107 @@ class SphericalBessel(nn.Module):
 
         for i in range(lstart, 0, -1):
             j0 = (2*i+1)/r * j1 - j2
-            if i-1<self.l_max:
-                y[i-1,...] = j0
+            if i-1<self.l_max+1:
+                y[..., i-1==self.l] = j0[..., i-1==self.l]
             j2 = j1
             j1 = j0
 
-
         true_j0 = torch.sinc(r/torch.pi)
-        y = y * true_j0/y[0,...]
-        y = y.transpose(0,1)*torch.sqrt(torch.Tensor([2]).to(r.device)/torch.pi)*k[None, None,:]
+        y = y / j0
+        y = y * true_j0
+
+        y[torch.logical_and(r<1e-20, self.l>0)] = 0
+        y[torch.logical_and(r<1e-20, self.l==0)] = 1
+
+        y = y*torch.sqrt(torch.Tensor([2])/torch.pi)*k
         return y.to(torch.float32)
     
 
-class FourierSeries(nn.Module):
-    def __init__(self, n_max: int = 1, scale = 1):
-        super(FourierSeries, self).__init__()
-        self.register_buffer('n_max', torch.tensor(n_max, dtype=torch.int))
-        self.register_buffer('scale', torch.tensor(scale, dtype=torch.float32))
-        self.register_buffer('n', torch.linspace(1, self.n_max, self.n_max))
+    def bessel_up(self, r, k):
 
-    def forward(self, t):
-        t = t[:,None]
-        
-        return torch.cat((t*0+1, torch.sin(t*self.n[None,:]*2*torch.pi/self.scale), torch.cos(t*self.n[None,:]*2*torch.pi/self.scale)), dim=-1).to(torch.float32)
+        r = r.to(torch.float64)[...,None]*k.to(torch.float64)
+        y = torch.zeros_like(r, dtype=torch.float64)
+
+        j0 =  torch.sin(r)/r
+        y[..., self.l==0] = j0[..., self.l==0]
+
+        j1 = j0/r - torch.cos(r)/r
+        y[..., self.l==1] = j1[..., self.l==1]
+
+        for i in range(1, self.l_max):
+            j2 = (2*i+1)/r*j1 - j0
+            y[..., self.l==i+1] = j2[..., self.l==i+1]
+            j0 = j1
+            j1 = j2
+
+        y[torch.abs(r)<1e-30] = 0
+
+        y = y*torch.sqrt(torch.Tensor([2])/torch.pi)*k
+        return y.to(torch.float32)
+
+
+    def forward(self, r, k):
+        bessel_up = self.bessel_up(r, k)
+        bessel_dwn = self.bessel_down(r, k)
+        r = r[...,None]*k
+
+        bessel_up[..., r<self.l] = bessel_dwn[..., r<self.l]
+
+        return bessel_up
     
+class FourierModes(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, t, scale, phase):
+        t = 2*torch.pi*(t.to(torch.float64)[...,None]*scale.to(torch.float64) - phase.to(torch.float64))
+        
+        return torch.cos(t).to(torch.float32)    
 
 class SphericalHarmonicsModule(nn.Module):
     def __init__(self, l_max: int = 1):
-        super(SphericalHarmonicsModule, self).__init__()
-        self.register_buffer('l_max', torch.tensor(l_max, dtype=torch.int))
-        self.sh = sct.SphericalHarmonics(l_max=self.l_max, normalized=True)
+        super().__init__()
+        self.l_max = l_max
+        self.sh = sct.SphericalHarmonics(l_max=self.l_max)
 
     def forward(self, xyz):
-        sh_values = self.sh.compute(xyz)
-        y = torch.zeros(sh_values.shape[0], self.l_max+1, 2*self.l_max+1).to(xyz.device)
-
-        n = 0
-        for l in torch.arange(0, self.l_max+1):
-            for m in torch.arange(-l, l+1):
-                y[:, l, m+self.l_max] = sh_values[:,n]
-                n = n+1
-        
-        return y.to(torch.float32)
+        sh_values = self.sh.compute(xyz)        
+        return sh_values
     
 
-class OrthonormalTimeSphericalNeRF(nn.Module):
+class OrthonormalTimeSphericalBesselNeRF(nn.Module):
     def __init__(self,
-                output_dim: int = 2,
-                k_max: int = 1, 
+                output_dim: int = 2, 
                 l_max: int = 1, 
-                n_max: int = 1,
-                t_scale: float = 1,
                 spline_weight_init_scale: float = 0.1, 
                 base_log_temperature: float = 5.0,
                 base_log_density: float = 10.0):
         
-        super(OrthonormalTimeSphericalNeRF, self).__init__()
+        super().__init__()
 
         self.base_log_temperature = base_log_temperature
         self.base_log_density = base_log_density
+        self.spline_linear = SplineLinear(in_features=(l_max+1)*(l_max+1), out_features=output_dim, init_scale=spline_weight_init_scale)
 
-        self.k_max = k_max
         self.l_max = l_max
-        self.n_max = n_max
-        self.t_scale = t_scale
 
-        self.r_bessel = SphericalBessel(k_max=k_max, l_max=l_max+1)
+        self.r_bessel = SphericalBessel(l_max=l_max)
         self.sh = SphericalHarmonicsModule(l_max=l_max)
-        self.t_fourier = FourierSeries(n_max=n_max, scale=t_scale)
+        self.t_fourier = FourierModes()
 
-        self.spline_linear = SplineLinear((2*n_max+1)*k_max*(l_max+1)*(2*l_max+1), output_dim, spline_weight_init_scale)
+        self.radius_scale = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.time_scale = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.time_phase = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+
 
         # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
-        self.log_absortpion = nn.ParameterDict([
-                                ['094',  torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['0131', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['0171', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['0193', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['0211', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['0304', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['0335', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['1171', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['1195', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['1284', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['1304', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['2171', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['2195', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['2284', torch.tensor(1.e-6, dtype=torch.float32)],
-                                ['2304', torch.tensor(1.e-6, dtype=torch.float32)],
-                        ])        
-
-        self.volumetric_constant = nn.ParameterDict([
-                                ['0', torch.tensor(1.0, dtype=torch.float32)],
-                                ['1', torch.tensor(1.0, dtype=torch.float32)],
-                                ['2', torch.tensor(1.0, dtype=torch.float32)],
-                        ])
-
-    def forward(self, x):
-        fourier = self.t_fourier(x[:, 3])
-        fourier[torch.isnan(fourier)] = 0
-        bessel = self.r_bessel(torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2]))
-        bessel[torch.isnan(bessel)] = 0
-        sh = self.sh(x[:, 0:3].contiguous())
-        sh[torch.isnan(sh)] = 0
-
-        x = self.spline_linear((sh[:,:,:,None, None]*bessel[:,:,None,:, None]*fourier[:, None, None, None,:]).reshape(x.shape[0], -1))
-        
-        # Add base density
-        x[:, 0] = x[:, 0] + self.base_log_density
-        # Add base temperature
-        x[:, 1] = x[:, 1] + self.base_log_temperature
-
-        if x.isnan().any():
-            print('nan')
-
-        return {'inferences': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
-    
-
-
-
-
-class TimeSolidSphericalNeRF(nn.Module):
-    def __init__(self,
-                output_dim: int = 2,
-                l_max: int = 1, 
-                n_max: int = 1,
-                t_scale: float = 1,
-                r_scale: float = 1,
-                spline_weight_init_scale: float = 0.1, 
-                base_log_temperature: float = 5.0,
-                base_log_density: float = 8.0):
-        
-        super(TimeSolidSphericalNeRF, self).__init__()
-
-        self.register_buffer('base_log_temperature', torch.tensor(base_log_temperature, dtype=torch.float32))
-        self.register_buffer('base_log_density', torch.tensor(base_log_density, dtype=torch.float32))
-
-        self.register_buffer('l_max', torch.tensor(l_max, dtype=torch.int))
-        self.register_buffer('n_max', torch.tensor(n_max, dtype=torch.int))
-        self.register_buffer('t_scale', torch.tensor(t_scale, dtype=torch.float32))
-        self.register_buffer('r_scale', torch.tensor(r_scale, dtype=torch.float32))
-        self.register_buffer('l', torch.linspace(0, self.l_max, self.l_max+1))
-
-        self.sh = SphericalHarmonicsModule(l_max=l_max)
-        self.t_fourier = FourierSeries(n_max=n_max, scale=t_scale)
-
-        self.spline_linear = SplineLinear((2*n_max+1)*(l_max+1)*(2*l_max+1), output_dim, spline_weight_init_scale)
-
-        self.radius_scaling = nn.Parameter(torch.ones(l_max+1, dtype=torch.float32))
-
-        # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
-        self.log_absortpion = nn.Parameter(torch.tensor([[14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0],
-                                                         [14.0, 14.0, 14.0]], dtype=torch.float32, requires_grad=True)) 
+        self.log_absortpion = nn.Parameter(20.0*torch.tensor([[1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0]], dtype=torch.float32, requires_grad=True)) 
 
         # Tensor with volumetric constant for all instruments.
         #  Position 0 (AIA), position 1 (EUVIA), and position 2 (EUVB)
@@ -280,14 +234,69 @@ class TimeSolidSphericalNeRF(nn.Module):
 
 
     def forward(self, x):
-        fourier = self.t_fourier(x[:, 3])
-        fourier[torch.isnan(fourier)] = 0
-        sh = self.sh(x[:, 0:3].contiguous())
+        fourier = self.t_fourier(x[:, 3], self.time_scale, self.time_phase)
+        bessel = self.r_bessel(torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2]), self.radius_scale)
+        sh = self.sh(x[:, 0:3].contiguous().to(torch.float64)).to(torch.float32)
 
-        sh = sh*torch.pow(torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2])[:,None,None]*torch.abs(self.radius_scaling[None,:,None]), -self.l[None,:, None])
-        sh[torch.isnan(sh)] = 0
+        # x = self.spline_linear((sh[:,:,:,None, None]*bessel[:,:,None,:, None]*fourier[:, None, None, None,:]).reshape(x.shape[0], -1))
+        x = torch.abs(self.spline_linear(fourier*bessel*sh))
+        
+        # Add base density
+        x[:, 0] = x[:, 0] + self.base_log_density
+        # Add base temperature
+        x[:, 1] = x[:, 1] + self.base_log_temperature
 
-        x = torch.abs(self.spline_linear((sh[:,:,:, None]*fourier[:, None, None,:]).reshape(x.shape[0], -1)))
+        return {'RhoT': x, 'log_abs': self.log_absortpion , 'vol_c': self.volumetric_constant}
+    
+class OrthonormalTimeSphericalRFourierNeRF(nn.Module):
+    def __init__(self,
+                output_dim: int = 2, 
+                l_max: int = 1, 
+                spline_weight_init_scale: float = 1.0, 
+                base_log_temperature: float = 5.0,
+                base_log_density: float = 10.0):
+        
+        super().__init__()
+
+        self.base_log_temperature = base_log_temperature
+        self.base_log_density = base_log_density
+        self.spline_linear = SplineLinear(in_features=2*(l_max+1)*(l_max+1), out_features=output_dim, init_scale=spline_weight_init_scale)
+
+        self.l_max = l_max
+
+        self.sh = SphericalHarmonicsModule(l_max=l_max)
+        self.t_fourier = FourierModes()
+
+        self.r_scale_no_t = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.r_phase_no_t = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.r_scale_t = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.r_phase_t = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.t_scale = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+        self.t_phase = nn.Parameter(torch.ones((l_max+1)*(l_max+1), dtype=torch.float32, requires_grad=True))
+
+
+        # Absorption for AIA, referred to instrument 0, EUVI-A refers to instrument 1, EUVI-B refers to instrument 2
+        self.log_absortpion = nn.Parameter(20.0*torch.tensor([[1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0],
+                                                         [1.0, 1.0, 1.0]], dtype=torch.float32, requires_grad=True)) 
+
+        # Tensor with volumetric constant for all instruments.
+        #  Position 0 (AIA), position 1 (EUVIA), and position 2 (EUVB)
+        self.volumetric_constant = nn.Parameter(torch.tensor([1., 1., 1.,], dtype=torch.float32, requires_grad=True)) 
+
+
+    def forward(self, x):
+        fourier_r_no_t = self.t_fourier(torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2]), self.r_scale_no_t, self.r_phase_no_t)/torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2])[...,None]
+        fourier_r_t = self.t_fourier(torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2]), self.r_scale_t, self.r_phase_t)/torch.sqrt(x[:, 0]*x[:, 0] + x[:, 1]*x[:, 1] + x[:, 2]*x[:, 2])[...,None]
+        fourier_t = self.t_fourier(x[:, 3], self.t_scale, self.t_phase)
+        sh = self.sh(x[:, 0:3].contiguous().to(torch.float64)).to(torch.float32)
+
+        # x = self.spline_linear((sh[:,:,:,None, None]*bessel[:,:,None,:, None]*fourier[:, None, None, None,:]).reshape(x.shape[0], -1))
+        x = torch.abs(self.spline_linear(torch.cat((fourier_t*fourier_r_t*sh, fourier_r_no_t*sh), dim=-1)))
         
         # Add base density
         x[:, 0] = x[:, 0] + self.base_log_density
