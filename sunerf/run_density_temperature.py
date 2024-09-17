@@ -51,6 +51,8 @@ if __name__ == '__main__':
     epochs = training_config['epochs'] if 'epochs' in training_config else 100
     log_every_n_steps = training_config['log_every_n_steps'] if 'log_every_n_steps' in training_config else None
     ckpt_path = training_config['meta_path'] if 'meta_path' in training_config else 'last'
+    lambda_image = training_config['lambda_image'] if 'lambda_image' in training_config else 1.0
+    lambda_regularization = training_config['lambda_regularization'] if 'lambda_regularization' in training_config else 1.0
 
     # initialize logger
     wandb.init(**logging_config)
@@ -68,6 +70,7 @@ if __name__ == '__main__':
     sunerf = DensityTemperatureSuNeRFModule(Rs_per_ds=data_module.Rs_per_ds, seconds_per_dt=data_module.seconds_per_dt,
                                             image_scaling_config=image_scaling_config, model=model, loss=loss,
                                             validation_dataset_mapping=data_module.validation_dataset_mapping,
+                                            lambda_image=lambda_image, lambda_regularization=lambda_regularization,
                                             **model_config)
 
     # initialize callbacks

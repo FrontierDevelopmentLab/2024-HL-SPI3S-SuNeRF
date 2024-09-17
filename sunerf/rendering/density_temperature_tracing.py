@@ -380,4 +380,4 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': torch.relu(RhoT[...,0])} # density is the regularizing quantity
     
     def regularization(self, distance, regularizing_quantity):
-        return torch.relu(distance[:,:] - 1.2 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
+        return torch.relu(distance[:,:] - 1.25 / self.Rs_per_ds) * torch.relu(regularizing_quantity)

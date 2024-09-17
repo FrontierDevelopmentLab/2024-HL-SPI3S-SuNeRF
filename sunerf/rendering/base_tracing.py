@@ -1,6 +1,8 @@
 import torch
 from torch import nn
+import datetime
 from sunerf.model.sunerf_nerf_models import NeRF
+from sunerf.model.stellar_model import SimpleStar
 from sunerf.train.sampling import SphericalSampler, HierarchicalSampler, StratifiedSampler, NonUniformStratifiedSampler
 
 class SuNeRFRendering(nn.Module):
@@ -116,6 +118,15 @@ class SuNeRFRendering(nn.Module):
         outputs['height_map'] = height_map
         outputs['absorption_map'] = absorption_map
         outputs['regularization'] = regularization
+        fine_out = None
+        coarse_out = None
+        image = None
+        absorption = None
+        weights = None
+        distance = None
+        height_map = None
+        absorption_map = None
+        regularization = None
         return outputs
 
     def forward_points(self, query_points):

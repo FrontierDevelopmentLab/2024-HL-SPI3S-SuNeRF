@@ -27,9 +27,10 @@ from skimage.measure import block_reduce
 class MultiThermalDataModule(BaseDataModule):
 
     def __init__(self, data_path, working_dir, Rs_per_ds=1, seconds_per_dt=86400, ref_time=None,
-                 batch_size=int(2 ** 10), debug=False, target_resolution=None, aia_preprocessing=False, **kwargs):
+                 batch_size=int(2 ** 10), debug=False, target_resolution=None, aia_preprocessing=False, normalize_time=True, **kwargs):
         self.target_resolution = target_resolution
         self.aia_preprocessing = aia_preprocessing
+        self.normalize_time = normalize_time
         os.makedirs(working_dir, exist_ok=True)
 
         data_dict = self.get_data(data_path=data_path, Rs_per_ds=Rs_per_ds, debug=debug, seconds_per_dt=seconds_per_dt, ref_time=ref_time)
@@ -57,6 +58,12 @@ class MultiThermalDataModule(BaseDataModule):
         images = np.concatenate([images[i] for i in train_index], axis=0)
         wavelengths = np.concatenate([wavelengths[i] for i in train_index], axis=0)
         instruments = np.concatenate([instruments[i] for i in train_index], axis=0)
+
+        if normalize_time:
+            tmax = np.max([np.max(times), np.max(valid_times)])
+            tmin = np.min([np.min(times), np.min(valid_times)])
+            valid_times = (valid_times - tmin)/(tmax - tmin)
+            times = (times - tmin)/(tmax - tmin)
 
         # shuffle
         r = np.random.permutation(rays.shape[0])

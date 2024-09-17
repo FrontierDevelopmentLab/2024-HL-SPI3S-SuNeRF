@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sunpy.visualization.colormaps as cm
 from sunpy.map import Map
+from sunpy.coordinates import frames, sun
 from sunpy.map.header_helper import get_observer_meta
 from tqdm import tqdm
 # For density and temperature rendering
@@ -13,8 +14,18 @@ from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadia
 from sunerf.evaluation.loader import ModelLoader
 from sunerf.model.stellar_model import SimpleStar
 from sunerf.model.mhd_model import MHDModel
+from sunerf.model.sunerf_lightning_classes import DensityTemperatureSuNeRFModule
 import glob
 import yaml
+import torch
+from sunerf.model.sunerf_nerf_models import NeRF_DT
+import psutil
+
+
+def log_memory_usage(stage):
+    process = psutil.Process()
+    mem_info = process.memory_info()
+    print(f"[{stage}] Memory Usage: {mem_info.rss / 1024 ** 2:.2f} MB")
 
 
 class ImageRender:
@@ -144,7 +155,7 @@ class ImageRender:
         s_map = None
 
 
-def load_observer_meta(path_to_file):
+def load_observer_meta(path_to_file, hg_carrington=True):
     """ Main function to load observer data
     
     Parameters
@@ -168,11 +179,22 @@ def load_observer_meta(path_to_file):
     # Extract observation time and satellite position when AIA produced image
     sat_coords = s_map.observer_coordinate 
     coord_meta = get_observer_meta(sat_coords)
-    lat = coord_meta['hglt_obs']  # latitude [degree]
-    lon = coord_meta['hgln_obs']  # longitude [degree]
-    dist = coord_meta['dsun_obs']  # instrument distance in units [m]
-    # Convert into expected units/coordinate system for the render
-    dist = dist*u.m.to(u.au)  # conversion to [AU] with astropy
+
+    # Choice of observer coordinates (Heliographic Carrington or Heliographic Stonyhurst)
+    # Extract observer data in heliographic Stonyhurst coordinates
+    sat_coords = sat_coords.transform_to(frames.HeliographicStonyhurst(obstime=sat_coords.obstime))
+    if hg_carrington:
+        # Extract observer data in heliographic Carrington coordinates
+        sat_coords = sat_coords.transform_to(frames.HeliographicCarrington(obstime=sat_coords.obstime,
+                                                                           observer=sat_coords))
+
+    # Extract observer data
+    lat = sat_coords.lat.to_value(u.deg)  # latitude [degree]
+    lon = sat_coords.lon.to_value(u.deg)  # longitude [degree]
+    dist = sat_coords.radius.to_value(u.au)  # instrument distance in units [AU]
+    # print(f"Lat: {lat}, Lon: {lon}, Dist: {dist}")
+    # print(f"Lat: {coord_meta['hglt_obs']}, Lon: {coord_meta['hgln_obs']}, Dist: {coord_meta['dsun_obs']*u.m.to(u.au)}")
+    # breakpoint()
     # Extract observation time -- first condition for SDO (t_obs), second condition for STEREO (date-obs)
     time = s_map.meta['t_obs'] if ('t_obs' in s_map.meta) else s_map.meta['date-obs']
 
@@ -220,6 +242,7 @@ if __name__ == '__main__':
     observer_ref = config['observer_ref']
     batch_size = config['batch_size']
     model = config['model']
+    sampling_config = config['sampling_config']
     
     # Find files and metadata for each observer
     observer_files = [sorted(glob.glob(f"{dir}/*.fits")) for dir in observer_dir]
@@ -255,6 +278,32 @@ if __name__ == '__main__':
         # Model
         model = MHDModel
         model_config = {'data_path': data_path}
+        
+    elif model == 'SuNeRF':
+        
+        # path to nerf data # TODO: confrim this is correct for nerf
+        data_path = '/mnt/disks/data/MHD' 
+        
+        # List of all density files # TODO: confrim this is correct for nerf
+        density_files = sorted(glob.glob(os.path.join(data_path, 'rho', '*.h5')))
+        
+        # path to last checkpoint
+        checkpoint_path = "/mnt/disks/data/sunerfs/psi/mhd_512_checkpoint_8-13/save_state.snf"
+
+        # load SuNeRF model
+        sunerf_model = torch.load(checkpoint_path)
+        
+        # identify timesteps # TODO: confrim this is correct for nerf
+        t_i = int(density_files[0].split('00')[1].split('.h5')[0])
+        t_f = int(density_files[-1].split('00')[1].split('.h5')[0])
+        t_shift = 0
+        dt = 3600.0
+        
+        # initialize example model to overwrite rendering
+     #  model = NeRF_DT
+        model_config = {}
+        
+
     else:
         raise ValueError('Model not implemented')
 
@@ -264,9 +313,17 @@ if __name__ == '__main__':
     # Iterate over the unpacked point coordinates and render images
     # Loop over observers
     for j, files in enumerate(observer_files):
-        rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
-                                                        model_config=model_config)
-        loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map)
+        
+        if model == 'SuNeRF':
+            loader = ModelLoader(rendering=sunerf_model["rendering"], model=sunerf_model["rendering"].fine_model, ref_map=s_map, serial=True)
+            
+        else:
+            rendering = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=model,
+                                                            model_config=model_config, 
+                                                            sampling_config=sampling_config['sampling_config'].copy(), 
+                                                            hierarchical_sampling_config=sampling_config['hierarchical_sampling_config'].copy())
+            loader = ModelLoader(rendering=rendering, model=rendering.fine_model, ref_map=s_map, serial=True)
+            
         render = ImageRender(render_path)
         resolution = (observer_res[j], observer_res[j])*u.pix
         # Loop over observer files
@@ -274,8 +331,13 @@ if __name__ == '__main__':
             # Convert time to seconds (fractional) 0 to 1 value that is expected by MHD
             t = ((datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f') -
                   s_map_t).total_seconds()+t_shift*dt)/((t_f-t_i)*dt)
-            # Outputs
-            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=np.array(observer_wl[j]), distance=d*u.AU,
+
+            if model == 'SuNeRF':
+                wl = sunerf_model['data_config']['wavelengths']
+            else:
+                _ , _, wl = np.intersect1d(observer_wl[j], np.array([94, 131, 171, 193, 211, 304, 335]), return_indices=True)
+            # Outputs 
+            outputs = loader.render_observer_image(lat*u.deg, lon*u.deg, t, wl=wl, distance=d*u.AU,
                                                    batch_size=batch_size, resolution=resolution)
 
             # Save as fits
@@ -294,4 +356,6 @@ if __name__ == '__main__':
 
             # Clear outputs
             outputs = None
-                    
+            # log_memory_usage("End loop - Clear outputs")
+            # breakpoint()
+        
