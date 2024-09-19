@@ -105,6 +105,12 @@ class SuNeRFRendering(nn.Module):
         outputs['height_map'] = height_map
         outputs['absorption_map'] = absorption_map
         outputs['regularization'] = regularization
+        if 'EM' in fine_out.keys():
+            outputs['EM'] = fine_out['EM']
+        if 'meanT' in fine_out.keys():
+            outputs['meanT'] = fine_out['meanT']
+        if 'mean_rho' in fine_out.keys():
+            outputs['mean_rho'] = fine_out['mean_rho']
         fine_out = None
         coarse_out = None
         image = None

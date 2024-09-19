@@ -371,15 +371,25 @@ class DensityTemperatureRadiativeTransfer(SuNeRFRendering):
         emission = density.pow(2)*temperature_response
         pixel_intensity_term = torch.exp(-absorption_integral) * emission[:,0:-1,:]   #TODO: Check which emission indexes should go here
         pixel_intensity = torch.trapezoid(pixel_intensity_term, x=z_vals[:, 0:-1, None], dim=1)
+
+        dem = torch.exp(-absorption_integral) * density.pow(2)[:,1:,:]
+        em = torch.trapezoid(dem, x=z_vals[:, 1:, None], dim=1)  
+
         for instrument in torch.unique(instruments):
             mask = instruments[:, 0, :] == instrument
             pixel_intensity[mask] = pixel_intensity[mask] * vol_c[instrument]   # TODO: Check which z_vals indexes should go here
+            em[mask] = em[mask] * vol_c[instrument] 
+
+        mean_temp = torch.trapezoid(density*torch.pow(10, log_temperature), x=z_vals[:,:,None], dim=1)
+        mean_temp = mean_temp/torch.trapezoid(density, x=z_vals[:,:,None], dim=1)
+
+        mean_rho = torch.trapezoid(density, x=z_vals[:,:,None], dim=1)/torch.trapezoid(density*0+1, x=z_vals[:,:,None], dim=1)
 
         # set the weights to the intensity contributions
         weights = torch.cat([pixel_intensity_term[:,0,:][:,None,:], pixel_intensity_term], dim=1).mean(dim=2)
         weights = weights / (weights.sum(1)[:, None] + 1e-10)
 
-        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': torch.relu(RhoT[...,0])} # density is the regularizing quantity
+        return {'image': pixel_intensity, 'weights': weights, 'regularizing_quantity': torch.relu(RhoT[...,0]), 'EM': em, 'meanT': mean_temp, 'mean_rho': mean_rho} # density is the regularizing quantity
     
     def regularization(self, distance, regularizing_quantity):
         return torch.relu(distance[:,:] - 1.25 / self.Rs_per_ds) * torch.relu(regularizing_quantity)
