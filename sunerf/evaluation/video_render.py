@@ -9,6 +9,7 @@ from sunpy.coordinates import HeliographicStonyhurst, Heliocentric
 from sunpy.map import Map
 from tqdm import tqdm
 from astropy import units as u
+from torch import nn
 
 import cv2
 import spiceypy as spice
@@ -16,8 +17,9 @@ from matplotlib.lines import Line2D
 
 from sunerf.evaluation.image_render import ImageRender
 from sunerf.evaluation.loader import ModelLoader
-
-
+from sunerf.rendering.density_temperature_tracing import DensityTemperatureRadiativeTransfer
+from sunerf.model.sunerf_nerf_models import NeRF_DT
+from sunerf.model.sunerf_lightning_classes import DensityTemperatureSuNeRFModule
 
 class VideoRender(ImageRender):
     r"""Class to store poses, render images, and save video
@@ -45,7 +47,18 @@ class VideoRender(ImageRender):
 
         self.sunerf_model = torch.load(self.vparams['checkpoint_path'])
         self.reference_map = Map(self.vparams['reference_map'])
-        self.loader = ModelLoader(rendering=self.sunerf_model['rendering'], model=self.sunerf_model['rendering'].fine_model, ref_map=self.reference_map, serial=True)
+
+        self.rendering_sunerf = DensityTemperatureRadiativeTransfer(Rs_per_ds=1, model=NeRF_DT, 
+                                                                    temperature_response_normalization= {0: 1.e+20, 1: 1.e-8, 2: 1.e-8},
+                                                                    use_aia_tresp= True)
+        
+
+        model_config = {'temperature_response_normalization': {0: 1.e+20, 1: 1.e-8, 2: 1.e-8}, 'use_aia_tresp': True}
+        self.sunerf = DensityTemperatureSuNeRFModule.load_from_checkpoint('/home/andres_munoz_j/aia_iti_512_log_psi_tnorm/final.ckpt', strict=False, Rs_per_ds=1, seconds_per_dt=864000, image_scaling_config={}, model=NeRF_DT, validation_dataset_mapping=None, **model_config)
+
+
+        # self.loader = ModelLoader(rendering=self.sunerf_model['rendering'], model=self.sunerf_model['rendering'].fine_model, ref_map=self.reference_map, serial=True)
+        self.loader = ModelLoader(rendering=self.rendering_sunerf, model=self.sunerf.rendering.fine_model, ref_map=self.reference_map, serial=True)
         self.wavelengths = self.sunerf_model['data_config']['wavelengths']
 
         self.resolution = (self.vparams['render']['resolution'], self.vparams['render']['resolution'])*u.pix
