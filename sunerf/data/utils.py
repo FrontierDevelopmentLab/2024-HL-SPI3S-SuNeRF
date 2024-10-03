@@ -1,6 +1,5 @@
 from astropy import units as u
 from astropy.visualization import ImageNormalize, LinearStretch
-from itipy.data.editor import LoadMapEditor, NormalizeRadiusEditor, AIAPrepEditor
 from sunpy.visualization.colormaps import cm
 
 from sunerf.baseline.reprojection import transform

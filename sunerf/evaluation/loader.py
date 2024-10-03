@@ -22,20 +22,23 @@ class SuNeRFLoader:
         state = torch.load(state_path)
         data_config = state['data_config']
         self.config = data_config
-        self.wavelength = data_config['wavelength']
         self.times = data_config['times']
         self.wcs = data_config['wcs']
-        self.resolution = data_config['resolution']
+        self.resolution = data_config['image_shape']
 
         rendering = state['rendering']
-        self.rendering = nn.DataParallel(rendering).to(device)
+        self.rendering = rendering.to(device)
         model = rendering.fine_model
-        self.model = nn.DataParallel(model).to(device)
+        self.model = model.to(device)
 
         self.seconds_per_dt = state['seconds_per_dt']
         self.Rs_per_ds = state['Rs_per_ds']
         self.Mm_per_ds = self.Rs_per_ds * (1 * u.R_sun).to_value(u.Mm)
         self.ref_time = state['ref_time']
+
+        self.temperature_response = state['temperature_response'].to(device)
+        self.instrument_scaling = state['instrument_scaling'].to(device)
+        self.absorption_model = state['absorption_model'].to(device)
 
         ref_map = Map(np.zeros(self.resolution), self.wcs)
         self.ref_map = ref_map
@@ -50,11 +53,16 @@ class SuNeRFLoader:
 
     @torch.no_grad()
     def load_observer_image(self, lat: u, lon: u, time: datetime,
-                            distance = (1 * u.AU).to(u.solRad),
+                            distance=(1 * u.AU).to(u.solRad),
                             center: Tuple[float, float, float] = None, resolution=None,
-                            batch_size: int = 4096):
+                            batch_size: int = 4096, instrument_key=None):
+        instrument_key = instrument_key if instrument_key is not None else list(self.temperature_response.keys())[0]
+        absorption_model = self.absorption_model
+        instrument_scaling = self.instrument_scaling[instrument_key]
+        temperature_response = self.temperature_response[instrument_key]
         # convert to pose
-        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad), center).numpy()
+        target_pose = pose_spherical(-lon.to_value(u.rad), lat.to_value(u.rad), distance.to_value(u.solRad),
+                                     center).numpy()
         # load rays
         if resolution is not None:
             ref_map = self.ref_map.resample(resolution)
@@ -78,7 +86,10 @@ class SuNeRFLoader:
 
         outputs = {}
         for b_rays_o, b_rays_d, b_time in zip(rays_o, rays_d, time):
-            b_outs = self.rendering(b_rays_o, b_rays_d, b_time)
+            b_outs = self.rendering(b_rays_o, b_rays_d, b_time,
+                                    temperature_response=temperature_response,
+                                    instrument_scaling=instrument_scaling,
+                                    absorption_model=absorption_model)
             for k, v in b_outs.items():
                 if k not in outputs:
                     outputs[k] = []

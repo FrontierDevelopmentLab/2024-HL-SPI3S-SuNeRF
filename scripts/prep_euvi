@@ -1,0 +1,12 @@
+csh
+
+module load idl
+
+setenv SSW ssw
+setenv SSW_INSTR SECCHI
+setenv SSW_INSTR AIA
+source ssw/gen/setup/setup.ssw
+sswidl
+
+files = FILE_SEARCH("/glade/work/rjarolim/data/sunerf/2012_08/euvi", "*.fts")
+SECCHI_PREP, files, /write_fts, savepath = "/glade/work/rjarolim/data/sunerf/2012_08/euvi_prep"

@@ -1,0 +1,34 @@
+base_path: "/glade/work/rjarolim/sunerf/all_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/sunerf/all_v01"
+
+data:
+  data_config:
+    - type: 'AIA'
+      data_path: '/glade/work/rjarolim/data/sunerf/2012_08_prep/aia/*.fits'
+    - type: 'EUVI'
+      key: 'EUVI-A'
+      data_path: '/glade/work/rjarolim/data/sunerf/2012_08_prep/euvi/*A.fts'
+    - type: 'EUVI'
+      key: 'EUVI-B'
+      data_path: '/glade/work/rjarolim/data/sunerf/2012_08_prep/euvi/*B.fts'
+  debug: False
+  batch_size: 2048
+  num_workers: 16
+
+logging:
+  project: "sunerf"
+  name: "AIA + EUVI-A + EUVI-B"
+
+training:
+  log_every_n_steps: null
+
+model:
+  image_scaling_config:
+    AIA: { vmax: 1.0 }
+    EUVI-A: { vmax: 1.0 }
+    EUVI-B: { vmax: 1.0 }
+  temperature_response_config:
+    AIA: { model: '/glade/work/rjarolim/sunerf/response/aia.pt', scaling: 0.0, n_channels: 7, learnable: False }
+    EUVI-A: { model: '/glade/work/rjarolim/sunerf/response/stereo_ahead.pt', scaling: 0.0, n_channels: 4, learnable: True }
+    EUVI-B: { model: '/glade/work/rjarolim/sunerf/response/stereo_behind.pt', scaling: 0.0, n_channels: 4, learnable: True }
+

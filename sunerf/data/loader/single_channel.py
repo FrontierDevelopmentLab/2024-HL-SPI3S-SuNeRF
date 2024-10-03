@@ -27,9 +27,9 @@ class SingleChannelDataModule(BaseDataModule):
 
         # unpack data
         images = data_dict['image']
-        rays = data_dict['all_rays']
+        rays = data_dict['rays']
 
-        log_overview(images, data_dict['pose'], times, cmap, seconds_per_dt, ref_time)
+        log_overview(images[..., None], data_dict['pose'], times, cmap, seconds_per_dt, ref_time)
 
         # select test image
         test_idx = len(images) // 6
@@ -68,7 +68,7 @@ class SingleChannelDataModule(BaseDataModule):
         batch_size = int(batch_size) * N_GPUS
 
         # init train dataset
-        train_dataset = MmapDataset({'target_image': npy_images, 'rays': npy_rays, 'time': npy_times},
+        train_dataset = MmapDataset({'image': npy_images, 'rays': npy_rays, 'time': npy_times},
                                     batch_size=batch_size)
 
         valid_rays = valid_rays.reshape((-1, 2, 3))
@@ -76,7 +76,7 @@ class SingleChannelDataModule(BaseDataModule):
         valid_times = valid_times.reshape(-1, 1)
         valid_images = valid_images.reshape(-1, 1)
 
-        valid_dataset = ArrayDataset({'target_image': valid_images, 'rays': valid_rays, 'time': valid_times},
+        valid_dataset = ArrayDataset({'image': valid_images, 'rays': valid_rays, 'time': valid_times},
                                      batch_size=batch_size)
 
         config = {'type': 'emission', 'Rs_per_ds': Rs_per_ds, 'seconds_per_dt': seconds_per_dt, 'ref_time': ref_time,

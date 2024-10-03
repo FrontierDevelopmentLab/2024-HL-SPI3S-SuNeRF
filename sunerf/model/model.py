@@ -1,66 +1,73 @@
-from typing import Tuple
-
 import torch
 from torch import nn
 
 
-class NeRF(nn.Module):
-    r"""
-    Neural radiance fields module.
-    """
+class GenericModel(nn.Module):
 
-    def __init__(
-            self,
-            d_input: int = 4,
-            d_output: int = 2,
-            n_layers: int = 8,
-            d_filter: int = 512,
-            skip: Tuple[int] = (),
-            encoding='positional'
-    ):
+    def __init__(self, in_dim, out_dim, dim=512, n_layers=8, encoding=None, activation='sine'):
         super().__init__()
-        self.d_input = d_input
-        self.skip = skip
-        self.act = Sine()
-
-        # encoding_config = {'type': 'positional', 'num_freqs': 20} if encoding_config is None else encoding_config
-        # encoding_type = encoding_config.pop('type')
-        if encoding == 'positional':
-            enc = PositionalEncoding(d_input=d_input, n_freqs=10)
-            in_layer = nn.Linear(enc.d_output, d_filter)
-            self.in_layer = nn.Sequential(enc, in_layer)
+        if encoding is None or encoding == 'none':
+            self.d_in = nn.Linear(in_dim, dim)
+        elif encoding == 'positional':
+            posenc = PositionalEncoding(10, in_dim)
+            d_in = nn.Linear(posenc.d_output, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
+        elif encoding == 'gaussian':
+            posenc = GaussianPositionalEncoding(20, in_dim)
+            d_in = nn.Linear(posenc.d_output, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
         else:
-            self.in_layer = nn.Linear(d_input, d_filter)
-        # elif encoding_type == 'none' or encoding_type is None:
-        #     self.in_layer = nn.Linear(d_input, d_filter)
-        # else:
-        #     raise ValueError(f'Unknown encoding type {encoding_type}')
+            raise NotImplementedError(f'Unknown encoding {encoding}')
+        lin = [nn.Linear(dim, dim) for _ in range(n_layers)]
+        self.linear_layers = nn.ModuleList(lin)
+        self.d_out = nn.Linear(dim, out_dim)
+        activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
+        activation_f = activation_mapping[activation]
+        self.in_activation = activation_f()
+        self.activations = nn.ModuleList([activation_f() for _ in range(n_layers)])
 
-        # Create model layers
-        self.layers = nn.ModuleList([nn.Linear(d_filter, d_filter) for i in range(n_layers - 1)])
-
-        self.out_layer = nn.Linear(d_filter, d_output)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        r"""
-        Forward pass with optional view direction.
-        """
-
-        # Apply forward pass
-        x = self.act(self.in_layer(x))
-        for i, layer in enumerate(self.layers):
-            x = self.act(layer(x))
-            # if i in self.skip:
-            #     x = torch.cat([x, x_input], dim=-1)
-        x = self.out_layer(x)
-
+    def forward(self, x):
+        x = self.in_activation(self.d_in(x))
+        for l, a in zip(self.linear_layers, self.activations):
+            x = a(l(x))
+        x = self.d_out(x)
         return x
 
 
-class EmissionModel(NeRF):
+class EmissionModel(GenericModel):
+
+    def __init__(self, n_channels=1, encoding='positional', **kwargs):
+        super().__init__(in_dim=4, out_dim=n_channels * 2, encoding=encoding, **kwargs)
+        self.n_channels = n_channels
+
+    def forward(self, x):
+        out = super().forward(x)
+        emission = torch.exp(out[..., :self.n_channels])
+        alpha = nn.functional.relu(out[..., self.n_channels:])
+        return {'emission': emission, 'alpha': alpha}
+
+class PlasmaModel(GenericModel):
+
+    def __init__(self, encoding='positional', **kwargs):
+        super().__init__(in_dim=4, out_dim=2, encoding=encoding, **kwargs)
+
+        self.T_range = nn.Parameter(torch.tensor([5.0, 8.0], dtype=torch.float32), requires_grad=False)
+
+    def forward(self, x):
+        out = super().forward(x)
+        log_T = out[..., 0:1] * (self.T_range[1] - self.T_range[0]) + self.T_range[0]
+        log_ne = out[..., 1:2]
+        return {'log_T': log_T, 'log_ne': log_ne, 'T': 10 ** log_T, 'ne': 10 ** log_ne}
+
+
+class AbsorptionModel(GenericModel):
 
     def __init__(self, **kwargs):
-        super().__init__(d_input=4, d_output=2, **kwargs)
+        super().__init__(in_dim=2, out_dim=1, **kwargs)
+
+    def forward(self, x):
+        out = super().forward(x)
+        return {'log_nu': out, 'nu': 10 ** out}
 
 
 class Sine(nn.Module):
@@ -70,6 +77,16 @@ class Sine(nn.Module):
 
     def forward(self, x):
         return torch.sin(self.w0 * x)
+
+
+class Swish(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.beta = nn.Parameter(torch.tensor(1., dtype=torch.float32), requires_grad=True)
+
+    def forward(self, x):
+        return x * torch.sigmoid(self.beta * x)
 
 
 class TrainablePositionalEncoding(nn.Module):
@@ -90,43 +107,33 @@ class TrainablePositionalEncoding(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    r"""
-    Sine-cosine positional encoder for input points.
-    """
 
-    def __init__(self, d_input: int, n_freqs: int, scale_factor: float = 2., log_space: bool = True):
-        """
-
-        Parameters
-        ----------
-        d_input: number of input dimensions
-        n_freqs: number of frequencies used for encoding
-        scale_factor: factor to adjust box size limit of 2pi (default 2; 4pi)
-        log_space: use frequencies in powers of 2
-        """
+    def __init__(self, num_freqs, in_features, max_freq=10):
         super().__init__()
-        self.d_input = d_input
-        self.n_freqs = n_freqs
-        self.log_space = log_space
-        self.d_output = d_input * (1 + 2 * self.n_freqs)
+        frequencies = 2 ** torch.linspace(-1, max_freq - 2, num_freqs)
+        self.frequencies = nn.Parameter(frequencies, requires_grad=False)
+        self.d_output = in_features * (1 + num_freqs * 2)
 
-        # Define frequencies in either linear or log scale
-        if self.log_space:
-            freq_bands = 2. ** torch.linspace(0., self.n_freqs - 1, self.n_freqs)
+    def forward(self, x):
+        encoded = x[..., None] * self.frequencies.reshape([1] * len(x.shape) + [-1])
+        encoded = encoded.reshape(*x.shape[:-1], -1)
+        encoded = torch.cat([torch.sin(encoded), torch.cos(encoded), x], -1)
+        return encoded
+
+
+class GaussianPositionalEncoding(nn.Module):
+
+    def __init__(self, num_freqs, d_input, scale=1., log_scale=True):
+        super().__init__()
+        if log_scale:
+            frequencies = 2 ** (torch.randn(num_freqs, d_input, dtype=torch.float32) * scale) * torch.pi
         else:
-            freq_bands = torch.linspace(2. ** 0., 2. ** (self.n_freqs - 1), self.n_freqs)
-            print('freq bands', freq_bands)
+            frequencies = torch.randn(num_freqs, d_input, dtype=torch.float32) * scale * torch.pi
+        self.frequencies = nn.Parameter(frequencies, requires_grad=False)
+        self.d_output = d_input * (1 + num_freqs * 2)
 
-        self.register_buffer('freq_bands', freq_bands)
-        self.scale_factor = scale_factor
-
-    def forward(self, x) -> torch.Tensor:
-        r"""
-        Apply positional encoding to input.
-        """
-        f = self.freq_bands[None, :, None]
-        enc = [x,
-               (torch.sin(x[:, None, :] * f / self.scale_factor)).reshape(x.shape[0], -1),
-               (torch.cos(x[:, None, :] * f / self.scale_factor)).reshape(x.shape[0], -1)
-               ]
-        return torch.concat(enc, dim=-1)
+    def forward(self, x):
+        encoded = x[..., None, :] * self.frequencies.reshape([1] * (len(x.shape) - 1) + [*self.frequencies.shape])
+        encoded = encoded.reshape(*x.shape[:-1], -1)
+        encoded = torch.cat([torch.sin(encoded), torch.cos(encoded), x], -1)
+        return encoded
